@@ -1,0 +1,49 @@
+<!DOCTYPE HTML>
+<html>
+  <head>
+    <title>Mission Control</title>
+  </head>
+  <body>
+    <script type="text/javascript" src="js/bundle.js" charset="utf-8"></script>
+
+    <label><input type="checkbox" id="connectedBox" value="first_checkbox"> Connected</label> <a href="javascript:wsc.connect()">reconnect</a> <br>
+    <label><input type="checkbox" id="loggingBox" value="second_checkbox"> Logging</label> <br>
+    <!-- <label><input type="checkbox" id="motorConnected"> Motor Conencted</label> <br> -->
+    <label><input type="checkbox" id="motorPowerBox"> Motor Power</label> <br>
+    <label><input type="checkbox" id="cameraTrackingBox"> Camera Tracking</label> <br>
+    <label><input type="checkbox" id="aiBox"> AI Tracking</label> <br>
+
+    <label>Main Battery Voltage: </label><label id="bat1"></label><br>
+    <label>Phone Battery Percentage: </label><label id="phoneBat"></label> <br>
+    <label>Direction: </label><label id="dir"></label> <br>
+    <label>Direction Count: </label><label id="dirCount"></label> <br>
+
+    <p>Control</p>
+    <input id="sliderControl" type="range" min="0" max="1000" step="1" oninput="wsc.newControlSliderValue(this.value)" style="width:400px"/>
+    <br>
+    <button type="button" onclick="wsc.zero()">Zero</button>
+    <br>
+    <button type="button" onclick="wsc.ws.send('state,start')">Logging Start</button>
+    <button type="button" onclick="wsc.ws.send('state,stop')">Logging Stop</button>
+    <br>
+    <button type="button" onclick="wsc.ws.send('motor,on')">Motor Power On</button>
+    <button type="button" onclick="wsc.ws.send('motor,off')">Motor Power Off</button>
+    <br>
+    <button type="button" onclick="wsc.ws.send('camera,on')">Camera Tracking On</button>
+    <button type="button" onclick="wsc.ws.send('camera,off')">Camera Tracking Off</button>
+    <br>
+    <button type="button" onclick="wsc.ws.send('ai,on')">AI On</button>
+    <button type="button" onclick="wsc.ws.send('ai,off')">AI Off</button>
+    <button type="button" onclick="wsc.ws.send('ai,resetRotation')">AI Reset Rotation</button>
+
+    <p>Amplitude</p>
+    <input id="sliderAmplitude" type="range" min="0" max="400" step="1" oninput="wsc.ws.send('amplitude,' + this.value)" style="width:400px"/>
+
+    <p id="time"></p>
+    <p id="posx"></p>
+    <p id="posy"></p>
+
+    <div id="trackingPlot"></div>
+
+  </body>
+</html>

@@ -1,0 +1,22 @@
+{
+  "name": "missioncontrol",
+  "version": "1.0.0",
+  "description": "",
+  "main": "main.js",
+  "scripts": {
+    "pack": "webpack",
+    "start": "node src/main.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "jsonfile": "^2.3.1",
+    "synaptic": "^1.0.8",
+    "ws": "^1.1.1"
+  },
+  "devDependencies": {
+    "jshint": "^2.9.3",
+    "jshint-loader": "^0.8.3",
+    "webpack": "^1.13.2"
+  }
+}
