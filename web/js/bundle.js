@@ -46,186 +46,40 @@
 
 	var ai = __webpack_require__(1)
 	var KiteControl = __webpack_require__(9)
+	var Plotter = __webpack_require__(10)
+	var WebSocketController = __webpack_require__(11)
+
+	window.wsc = new WebSocketController()
 
 	var kiteControl = new KiteControl(ai.network)
 
-	function WebSocketController() {
-	  // this.controlAmplitude = 200 // +- 300 mm from
-	  // this.controlOffSet = 0
-	  // this.controlInput = 0
-	  this.lastMove = 0 // timer
-	  this.buffer = new Int16Array(1)
-	}
-
-	WebSocketController.prototype = {
-
-	  connect: function() {
-	    // Let us open a web socket
-	    this.ws = new WebSocket("ws://localhost:8080") // port 82 for control
-	    this.ws.binaryType = "arraybuffer"
-
-	    this.ws.onopen = function() {
-	      // Web Socket is connected, send data using send()
-	      document.getElementById("connectedBox").checked = true
-	      wsc.ws.send("id,WEBCONTROL")
-	    }
-
-	    this.ws.onmessage = function (msg) {
-	      if(msg.data instanceof ArrayBuffer) {
-	        var data = new Float64Array(msg.data)
-	        kiteControl.update(KiteControl.kinematicRaw2Dict(data))
-	      } else {
-	        processText(msg.data)
-	      }
-	    }
-
-	    this.ws.onclose = function() {
-	      document.getElementById("connectedBox").checked = false
-	    }
-	  },
-
-	  newControlSliderValue: function(val) {
-	    // do nothing if last move was less than 25 ms ago
-	    if(Date.now() - this.lastMove > 25) {
-	      // controlInput = (val/500-1) * 400 / 20 * controlAmplitude
-	      this.buffer[0] = val // + controlOffSet
-	      this.ws.send( buffer )
-	      this.lastMove = Date.now()
-	    }
-	  },
-
-	  zero: function() {
-	    //controlOffSet += controlInput
-	    this.ws.send('motor,zero') // zero in the WebSocketServer
-	    document.getElementById("sliderControl").value = 500
-	  },
-
-
-	  processText: function(data) {
-	    var input = data.split(',')
-	    var command = input[0]
-	    var value = input[1]
-	    switch (command) {
-	      case 'state':
-	        console.log(data)
-	        switch (value) {
-	          case 'start':
-	            document.getElementById("loggingBox").checked = true
-	            break;
-	          case 'stop':
-	            document.getElementById("loggingBox").checked = false
-	            break;
-	          default:
-	        }
-	      break
-	      case 'motor':
-	        console.log(data)
-	        switch (value) {
-	          case 'on':
-	            document.getElementById("motorPowerBox").checked = true
-	            break;
-	          case 'off':
-	            document.getElementById("motorPowerBox").checked = false
-	            break;
-	          // case 'online':
-	          //   document.getElementById("motorConnected").checked = true
-	          //   break;
-	          // case 'offline':
-	          //   document.getElementById("motorConnected").checked = false
-	          //   break;
-	          default:
-
-	        }
-	      break
-	      case 'bat1':
-	        document.getElementById("bat1").innerHTML = parseFloat(value).toFixed(2)
-	      break
-	      case 'phoneBat':
-	        document.getElementById("phoneBat").innerHTML = (100*parseFloat(value)).toFixed(2)
-	      break
-	      case 'camera':
-	        console.log(data)
-	        switch (value) {
-	          case 'on':
-	            document.getElementById("cameraTrackingBox").checked = true
-	            break;
-	          case 'off':
-	            document.getElementById("cameraTrackingBox").checked = false
-	            break;
-	        }
-	      break
-	      case 'ai':
-	        console.log(data)
-	        switch (value) {
-	          case 'on':
-	            document.getElementById("aiBox").checked = true
-	            break;
-	          case 'off':
-	            document.getElementById("aiBox").checked = false
-	            break;
-	        }
-	      break
-	      case 'dir':
-	        document.getElementById("dir").innerHTML = parseFloat(value).toFixed(2)
-	      break
-	      case 'dirCount':
-	        document.getElementById("dirCount").innerHTML = parseFloat(value).toFixed(2)
-	      break
-
-	      default:
-	        console.log(data)
-	    }
-	  }
+	wsc.onBinary = function(data) {
+	  kiteControl.update(KiteControl.kinematicRaw2Dict(data))
 	}
 
 	kiteControl.onUpdate = function(kinematic) {
-	  trackingPlot.plotLine(kiteControl.lastLineSegment())
+	  var line = kiteControl.lastLineSegment()
+	  if (line !== null) {
+	    trackingPlot.plotLine(line)
+	  }
+	  trackingPlot.plotKite(kinematic.pos.x, kinematic.pos.y, kinematic.pos.dir)
 
 	  // do SOMETHING
-	  document.getElementById("time").innerHTML = time
-	  document.getElementById("posx").innerHTML = posx
-	  document.getElementById("posy").innerHTML = posy
+	  document.getElementById("time").innerHTML = kinematic.time
+	  document.getElementById("posx").innerHTML = kinematic.pos.x
+	  document.getElementById("posy").innerHTML = kinematic.pos.y
+	  document.getElementById("posdir").innerHTML = kinematic.pos.dir
 	}
 
+	window.trackingPlot = new Plotter("trackingPlot", 400, 400)
 
-
-
-	function Plotter(id, width, height) {
-	  this.canvas = document.createElement("canvas")
-	  this.canvas.width = width
-	  this.canvas.height = height
-	  this.context = this.canvas.getContext("2d")
-	  this.container = document.getElementById(id)
-	}
-
-	Plotter.prototype = {
-	  plotLine: function(line, color) {
-	    // draw the kite
-	    this.contet.strokeStyle = "#000000";
-	    if (color) {
-	      this.contet.strokeStyle = "#" + color;
+	document.onkeypress = function (e) {
+	    e = e || window.event;
+	    if (e.keyCode === 97) {
+	      wsc.toggleAI()
 	    }
+	};
 
-	    this.contet.lineWidth=1;
-	    this.contet.beginPath();
-	    this.contet.moveTo(line[0][0], line[0][1]);
-
-	    for (var i = 1; i < line.length; i++) {
-	      this.contet.lineTo(line[i][0], line[i][1]);
-	    }
-	    this.contet.stroke();
-	  },
-
-	  plotKite: function(x, y, dir) {
-
-	  }
-	}
-
-	var trackingPlot = new Plotter('trackingPlot', 400, 400)
-
-
-
-	window.wsc = new WebSocketController()
 	wsc.connect()
 
 
@@ -3428,14 +3282,14 @@
 
 	KiteControl.prototype = {
 	  update : function(kinematic) {
-	    this.kinematicBuffer.push(kinematic)
+	    if (this.kinematicBuffer.length == this.bufferSize) {
+	      this.kinematicBuffer.shift()
+	    }
 
+	    this.kinematicBuffer.push(kinematic)
 	    if (this.kinematicBuffer.length == this.bufferSize) {
 	      // calculate direction
 	      this.dir = this.newDirection(this.kinematicBuffer[0], kinematic)
-
-	      this.kinematicBuffer.shift()
-
 	    }
 
 	    kinematic.pos.dir = this.dir
@@ -3445,18 +3299,18 @@
 	    }
 	  },
 
-	  newDirection : function(k1, k2) {
+	  newDirection : function(k1, k2) { // last, new
 	    var dx = k2.pos.x - k1.pos.x
 	    var dy = k2.pos.y - k1.pos.y
 
 	    if ((dx*dx+dy*dy) < 0.0008) return // needs to move atleast 2 percet of screen
 
 	    var newDir = Math.atan2(dy, dx) // counter clockclock-wise, with positive x as reference
+
 	    newDir = Math.PI/2 - newDir
 	    if (newDir < 0) {
 	      newDir += 2*Math.PI
 	    }
-
 	    var angleChange = newDir - this.direction
 
 	    if (Math.abs(angleChange) > 3/2*Math.PI) {
@@ -3474,10 +3328,21 @@
 
 	  lastLineSegment : function() {
 	    var b = this.kinematicBuffer
-	    var prev = this.bufferSize - 2
-	    var last = this.bufferSize - 1
-	    return [[b[prev].pos.x, b[prev].pos.y], [b[last].pos.x, b[last].pos.y]]
+	    if (b.length == this.bufferSize) {
+	      var prev = b[this.bufferSize - 2]
+	      var last = b[this.bufferSize - 1]
+	      return [[prev.pos.x, prev.pos.y], [last.pos.x, last.pos.y]]
+	    }
+
+	    return null
 	  }
+
+	  // predictLineSegments: function(N, motorPosition) {
+	  //
+	  //
+	  //
+	  // }
+
 	}
 
 	KiteControl.kinematicRaw2Dict = function(r) {
@@ -3488,6 +3353,220 @@
 	      x: r[1],
 	      y: r[2],
 	    }
+	  }
+	}
+
+
+/***/ },
+/* 10 */
+/***/ function(module, exports) {
+
+	module.exports = Plotter
+
+
+	function Plotter(id, width, height) {
+	  this.canvas = document.createElement("canvas")
+	  this.canvas.width = width
+	  this.canvas.height = height
+	  this.context = this.canvas.getContext("2d")
+	  this.container = document.getElementById(id)
+	  this.container.appendChild(this.canvas)
+	}
+
+	Plotter.prototype = {
+	  plotLine: function(line, color) {
+	    // draw the kite
+	    this.context.strokeStyle = "#000000";
+	    if (color) {
+	      this.context.strokeStyle = "#" + color;
+	    }
+
+	    line = line.map(function(p) {return [p[0]*this.canvas.width, (1-p[1])*this.canvas.height]}, this)
+
+	    this.context.lineWidth=1;
+	    this.context.beginPath();
+	    this.context.moveTo(line[0][0], line[0][1]);
+
+	    for (var i = 1; i < line.length; i++) {
+	      this.context.lineTo(line[i][0], line[i][1]);
+	    }
+	    this.context.stroke();
+	  },
+
+	  plotKite: function(x, y, dir) {
+	    this.context.fillStyle = "red";
+	    this.context.save(); // save the unrotated context of the canvas so we can restore it later
+	    this.context.translate(x*this.canvas.width, (1-y)*this.canvas.height); // move to the point of the kite
+	    this.context.rotate(dir); // rotate the canvas to the specified degrees
+
+	    // draw the kite
+	    this.context.beginPath();
+	    this.context.moveTo(-2, 4);
+	    this.context.lineTo(0,-4);
+	    this.context.lineTo(2, 4);
+	    this.context.closePath();
+	    this.context.fill();
+
+	    this.context.restore(); // we’re done with the rotating so restore the unrotated ctx
+	  },
+
+	  clear : function() {
+	    this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+	  },
+	}
+
+
+/***/ },
+/* 11 */
+/***/ function(module, exports) {
+
+	module.exports = WebSocketController
+
+	function WebSocketController() {
+	  // this.controlAmplitude = 200 // +- 300 mm from
+	  // this.controlOffSet = 0
+	  // this.controlInput = 0
+	  this.lastMove = 0 // timer
+	  this.buffer = new Int16Array(1)
+	  this.ai = false
+	}
+
+	WebSocketController.prototype = {
+
+	  connect: function() {
+	    // Let us open a web socket
+	    var self = this
+	    this.ws = new WebSocket("ws://localhost:8080") // port 82 for control
+	    this.ws.binaryType = "arraybuffer"
+
+	    this.ws.onopen = function() {
+	      // Web Socket is connected, send data using send()
+	      document.getElementById("connectedBox").checked = true
+	      self.ws.send("id,WEBCONTROL")
+	    }
+
+	    this.ws.onmessage = function (msg) {
+	      if(msg.data instanceof ArrayBuffer) {
+	        var data = new Float64Array(msg.data)
+	        if (self.onBinary !== undefined) {
+	          self.onBinary(data)
+	        }
+	      } else {
+	        self.processText(msg.data)
+	      }
+	    }
+
+	    this.ws.onclose = function() {
+	      document.getElementById("connectedBox").checked = false
+	    }
+	  },
+
+	  newControlSliderValue: function(val) {
+	    // do nothing if last move was less than 25 ms ago
+	    if(Date.now() - this.lastMove > 25 && !this.ai) {
+	      // controlInput = (val/500-1) * 400 / 20 * controlAmplitude
+	      this.buffer[0] = val // + controlOffSet
+	      this.ws.send( this.buffer )
+	      this.lastMove = Date.now()
+	    }
+	  },
+
+	  zero: function() {
+	    //controlOffSet += controlInput
+	    this.ws.send('motor,zero') // zero in the WebSocketServer
+	    document.getElementById("sliderControl").value = 500
+	  },
+
+
+	  processText: function(data) {
+	    var input = data.split(',')
+	    var command = input[0]
+	    var value = input[1]
+	    switch (command) {
+	      case 'state':
+	        console.log(data)
+	        switch (value) {
+	          case 'start':
+	            document.getElementById("loggingBox").checked = true
+	            break;
+	          case 'stop':
+	            document.getElementById("loggingBox").checked = false
+	            break;
+	          default:
+	        }
+	      break
+	      case 'motor':
+	        console.log(data)
+	        switch (value) {
+	          case 'on':
+	            document.getElementById("motorPowerBox").checked = true
+	            break;
+	          case 'off':
+	            document.getElementById("motorPowerBox").checked = false
+	            break;
+	          // case 'online':
+	          //   document.getElementById("motorConnected").checked = true
+	          //   break;
+	          // case 'offline':
+	          //   document.getElementById("motorConnected").checked = false
+	          //   break;
+	          default:
+
+	        }
+	      break
+	      case 'bat1':
+	        document.getElementById("bat1").innerHTML = parseFloat(value).toFixed(2)
+	      break
+	      case 'phoneBat':
+	        document.getElementById("phoneBat").innerHTML = (100*parseFloat(value)).toFixed(2)
+	      break
+	      case 'camera':
+	        console.log(data)
+	        switch (value) {
+	          case 'on':
+	            document.getElementById("cameraTrackingBox").checked = true
+	            break;
+	          case 'off':
+	            document.getElementById("cameraTrackingBox").checked = false
+	            break;
+	        }
+	      break
+	      case 'ai':
+	        console.log(data)
+	        switch (value) {
+	          case 'on':
+	            document.getElementById("aiBox").checked = true
+	            break;
+	          case 'off':
+	            document.getElementById("aiBox").checked = false
+	            break;
+	        }
+	      break
+	      case 'dir':
+	        document.getElementById("dir").innerHTML = parseFloat(value).toFixed(2)
+	      break
+	      case 'dirCount':
+	        document.getElementById("dirCount").innerHTML = parseFloat(value).toFixed(2)
+	      break
+
+	      default:
+	        console.log(data)
+	    }
+	  },
+
+	  aiOn: function() {
+	    this.ai = false
+	    this.ws.send('ai,on')
+	  },
+
+	  aiOff: function() {
+	    this.ai = false
+	    this.ws.send('ai,off')
+	  },
+
+	  toggleAI: function() {
+	    this.ai = !this.ai
+	    this.ai ? this.ws.send('ai,on') : this.ws.send('ai,off')
 	  }
 	}
 

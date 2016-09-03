@@ -5,7 +5,6 @@ var KiteControl = require('./kiteControl.js')
 
 var kiteControl = new KiteControl(ai.network)
 
-
 var wsServer = new WebSocketServer({ port: 8080 })
 
 var logging = false
@@ -33,6 +32,10 @@ wsServer.on('connection', ws => {
   ws.on('message', (data, flags) => {
     flags.binary ? processBinary(ws, data) : processText(ws, data)
   })
+  ws.on('close', function close() {
+    console.log(ws['deviceId'], " disconnected")
+    delete wss[ws['deviceId']]
+  });
 })
 
 function processBinary(ws, data) {
@@ -174,7 +177,7 @@ function processText(ws, data) {
 
 
 function saveSession() {
-  var file = __dirname + '/sessions/' + sessionName + '.json'
+  var file = __dirname + '/../sessions/' + sessionName + '.json'
   var obj = {kinematic: kinematicLog, control: controlLog}
 
   jsonfile.writeFile(file, obj, err => {
@@ -215,8 +218,8 @@ setInterval(function () {
   theta += 0.1
   var x = Math.sin(theta)*0.3 + offsetx + 0.5
   var y = Math.cos(theta)*0.3 + offsety + 0.5
-  offsetx += Math.random()*0.1 - offsetx * 0.1
-  offsety += Math.random()*0.1 - offsety * 0.1
+  offsetx += (Math.random()-0.5)*2*0.01 - offsetx * 0.1
+  offsety += (Math.random()-0.5)*2*0.01 - offsety * 0.1
 
   var raw = new Float64Array(3)
   raw[1] = x

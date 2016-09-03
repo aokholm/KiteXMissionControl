@@ -14,14 +14,14 @@ function KiteControl(network) {
 
 KiteControl.prototype = {
   update : function(kinematic) {
-    this.kinematicBuffer.push(kinematic)
+    if (this.kinematicBuffer.length == this.bufferSize) {
+      this.kinematicBuffer.shift()
+    }
 
+    this.kinematicBuffer.push(kinematic)
     if (this.kinematicBuffer.length == this.bufferSize) {
       // calculate direction
       this.dir = this.newDirection(this.kinematicBuffer[0], kinematic)
-
-      this.kinematicBuffer.shift()
-
     }
 
     kinematic.pos.dir = this.dir
@@ -31,18 +31,18 @@ KiteControl.prototype = {
     }
   },
 
-  newDirection : function(k1, k2) {
+  newDirection : function(k1, k2) { // last, new
     var dx = k2.pos.x - k1.pos.x
     var dy = k2.pos.y - k1.pos.y
 
     if ((dx*dx+dy*dy) < 0.0008) return // needs to move atleast 2 percet of screen
 
     var newDir = Math.atan2(dy, dx) // counter clockclock-wise, with positive x as reference
+
     newDir = Math.PI/2 - newDir
     if (newDir < 0) {
       newDir += 2*Math.PI
     }
-
     var angleChange = newDir - this.direction
 
     if (Math.abs(angleChange) > 3/2*Math.PI) {
@@ -60,10 +60,21 @@ KiteControl.prototype = {
 
   lastLineSegment : function() {
     var b = this.kinematicBuffer
-    var prev = this.bufferSize - 2
-    var last = this.bufferSize - 1
-    return [[b[prev].pos.x, b[prev].pos.y], [b[last].pos.x, b[last].pos.y]]
+    if (b.length == this.bufferSize) {
+      var prev = b[this.bufferSize - 2]
+      var last = b[this.bufferSize - 1]
+      return [[prev.pos.x, prev.pos.y], [last.pos.x, last.pos.y]]
+    }
+
+    return null
   }
+
+  // predictLineSegments: function(N, motorPosition) {
+  //
+  //
+  //
+  // }
+
 }
 
 KiteControl.kinematicRaw2Dict = function(r) {
