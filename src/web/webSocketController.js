@@ -72,7 +72,7 @@ WebSocketController.prototype = {
             break;
           default:
         }
-      break
+        break
       case 'motor':
         console.log(data)
         switch (value) {
@@ -91,13 +91,13 @@ WebSocketController.prototype = {
           default:
 
         }
-      break
+        break
       case 'bat1':
         document.getElementById("bat1").innerHTML = parseFloat(value).toFixed(2)
-      break
+        break
       case 'phoneBat':
         document.getElementById("phoneBat").innerHTML = (100*parseFloat(value)).toFixed(2)
-      break
+        break
       case 'camera':
         console.log(data)
         switch (value) {
@@ -108,7 +108,7 @@ WebSocketController.prototype = {
             document.getElementById("cameraTrackingBox").checked = false
             break;
         }
-      break
+        break
       case 'ai':
         console.log(data)
         switch (value) {
@@ -119,13 +119,17 @@ WebSocketController.prototype = {
             document.getElementById("aiBox").checked = false
             break;
         }
-      break
+        break
       case 'dir':
         document.getElementById("dir").innerHTML = parseFloat(value).toFixed(2)
-      break
+        break
       case 'dirCount':
         document.getElementById("dirCount").innerHTML = parseFloat(value).toFixed(2)
-      break
+        break
+      case 'aiControlValue':
+        console.log(value);
+        document.getElementById("sliderControl").value = parseFloat(value)*1000
+        break
 
       default:
         console.log(data)

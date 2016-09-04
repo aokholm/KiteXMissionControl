@@ -51,7 +51,7 @@
       <button type="button" onclick="wsc.aiOff()">AI Off</button>
       <button type="button" onclick="wsc.ws.send('ai,resetRotation')">AI Reset Rotation</button>
       <p>Amplitude</p>
-      <input id="sliderAmplitude" type="range" min="0" max="400" step="1" oninput="wsc.ws.send('amplitude,' + this.value)" style="width:400px"/>
+      <input id="sliderAmplitude" type="range" min="0" max="400" step="1" oninput="wsc.ws.send('motorAmplitude,' + this.value)" style="width:400px"/>
 
 
     </div>

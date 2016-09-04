@@ -28,10 +28,28 @@ kiteControl.onUpdate = function(kinematic) {
 window.trackingPlot = new Plotter("trackingPlot", 400, 400)
 
 document.onkeypress = function (e) {
-    e = e || window.event;
-    if (e.keyCode === 97) {
+    var charCode = (typeof e.which == "number") ? e.which : e.keyCode
+    
+    if (charCode === 97) { // a
       wsc.toggleAI()
     }
-};
+
+    if (charCode === 122) { // z
+      wsc.zero()
+    }
+
+    if (charCode === 109) { // m
+
+    }
+
+    if (charCode === 100) { // d
+      wsc.ws.send("ai,dirDecrement")
+    }
+
+    if (charCode === 105) { // i
+      wsc.ws.send("ai,dirIncrement")
+    }
+}
+
 
 wsc.connect()

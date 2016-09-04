@@ -12,6 +12,11 @@ var kinematicLog = []
 var controlLog = []
 var sessionName
 
+var motorRelativePos = 0
+var motorAbsPos = 0
+var motorOffset = 0
+var motorAmplitude = 200
+
 wsServer.broadcast = data => {
   wsServer.clients.forEach( client => {
     client.send(data);
@@ -42,7 +47,7 @@ function processBinary(ws, data) {
   switch (ws.deviceId) {
     case DEVICES.CAMERA:
       var raw = new Float64Array(new Uint8Array(data).buffer)
-      kinematic = kinematicRaw2Dict(raw)
+      kinematic = KiteControl.kinematicRaw2Dict(raw)
       // pass on data to webcontrol
       if (DEVICES.WEBCONTROL in wss) {
         wss[DEVICES.WEBCONTROL].send(data, {binary: true, masked: true})
@@ -57,43 +62,37 @@ function processBinary(ws, data) {
 
       break
     case DEVICES.CONTROL:
-      // controlMotor(data)
       var raw = new Int16Array(new Uint8Array(data).buffer)
       var newPosition = raw[0]
       controlMotor(newPosition)
       break
     case DEVICES.WEBCONTROL:
-      // controlMotor(data)
       var raw = new Int16Array(new Uint8Array(data).buffer)
       var newPosition = raw[0]
-      controlMotor(newPosition)
+      controlMotor(newPosition/1000)
       break
     default:
-
   }
-  // var uint16 = new Uint16Array(new Uint8Array(data).buffer)
-  // console.log(wssReverse)
-  // ws.send(uint16, {binary: true, masked: true})
 }
 
-function controlMotor(newPosition) {
+function controlMotor(val) {
   // var raw = new Int16Array(new Uint8Array(data).buffer)
   // var newPosition = raw[0]
+  motorRelativePos = (val*2-1) * motorAmplitude * 400 / 40
+  motorAbsPos = motorRelativePos + motorOffset // 400 steps pr 40 mm
 
   var data = new Int16Array(1)
-  data[0] = newPosition
-
+  data[0] = motorAbsPos
+  console.log(motorAbsPos, " relative: ", motorRelativePos);
   if (DEVICES.MOTOR in wss) {
     // console.log(cam.time)
     wss[DEVICES.MOTOR].send(data, {binary: true, masked: true})
   }
 
   if (logging) {
-    controlLog.push({'t': (new Date() - startTime)/1000, 'p': newPosition})
+    controlLog.push({'t': (new Date() - startTime)/1000, 'p': motorRelativePos})
   }
 }
-
-
 
 function processText(ws, data) {
   var input = data.split(',')
@@ -126,6 +125,10 @@ function processText(ws, data) {
       }
       break
     case 'motor':
+      if (value === "zero") {
+        motorOffset += motorRelativePos
+      }
+
       if (DEVICES.MOTOR in wss) { // pass on commands to the motor controller
         wss[DEVICES.MOTOR].send(data, {masked: true})
       }
@@ -155,19 +158,29 @@ function processText(ws, data) {
     case 'ai':
       switch (value) {
         case 'on':
-            kiteControl.autonomous = true
+          kiteControl.autonomous = true
           break
         case 'off':
-            kiteControl.autonomous = false
+          kiteControl.autonomous = false
           break
         case 'resetRotation':
-            kiteControl.resetRotation()
+          kiteControl.resetRotation()
+          break
+        case 'dirDecrement':
+          console.log("!");
+          kiteControl.directionCount -= 1
+          break
+        case 'dirIncrement':
+          kiteControl.directionCount += 1
           break
         default:
       }
       if (DEVICES.WEBCONTROL in wss) { // and feed back data to webcontrol for interface update.
         wss[DEVICES.WEBCONTROL].send(data, {masked: true})
       }
+      break
+    case 'motorAmplitude':
+      motorAmplitude = parseFloat(value)
       break
     default:
 
@@ -196,36 +209,56 @@ function startSession() {
 
 kiteControl.onUpdate = function(kinematic) {
   var controlValue = this.network.activate([kinematic.pos.x, kinematic.pos.y, kinematic.pos.dir])[0]
-  controlValue = (controlValue*2-1) * 100 * 400 / 20
-
-  console.log(controlValue)
-  var raw = new Int16Array(1)
-  raw[0] = controlValue
+  if (this.autonomous) controlMotor(controlValue)
 
   if (DEVICES.WEBCONTROL in wss) { // and feed back data to webcontrol for interface update.
+    if (this.autonomous) wss[DEVICES.WEBCONTROL].send("aiControlValue," + controlValue , {masked: true})
     wss[DEVICES.WEBCONTROL].send("dir," + this.direction , {masked: true})
     wss[DEVICES.WEBCONTROL].send("dirCount," + this.directionCount , {masked: true})
   }
-
-  if (autonomous) controlMotor(raw)
 }
 
-var theta = 0
-var offsetx = 0
-var offsety = 0
+// TESTING
+if (false) {
+  var theta = 0
+  var offsetx = 0
+  var offsety = 0
 
-setInterval(function () {
-  theta += 0.1
-  var x = Math.sin(theta)*0.3 + offsetx + 0.5
-  var y = Math.cos(theta)*0.3 + offsety + 0.5
-  offsetx += (Math.random()-0.5)*2*0.01 - offsetx * 0.1
-  offsety += (Math.random()-0.5)*2*0.01 - offsety * 0.1
+  setInterval(function () {
+    theta += 0.1
+    var x = Math.sin(theta)*0.3 + offsetx + 0.5
+    var y = Math.cos(theta)*0.3 + offsety + 0.5
+    offsetx += (Math.random()-0.5)*2*0.01 - offsetx * 0.1
+    offsety += (Math.random()-0.5)*2*0.01 - offsety * 0.1
 
-  var raw = new Float64Array(3)
-  raw[1] = x
-  raw[2] = y
-  // pass on data to webcontrol
-  if (DEVICES.WEBCONTROL in wss) {
-    wss[DEVICES.WEBCONTROL].send(raw, {binary: true, masked: true})
+    var raw = new Float64Array(3)
+    raw[1] = x
+    raw[2] = y
+    // pass on data to webcontrol
+    // if (DEVICES.WEBCONTROL in wss) {
+    //   wss[DEVICES.WEBCONTROL].send(raw, {binary: true, masked: true})
+    // }
+    test(raw)
+
+  }, 100)
+
+  function test(raw) {
+    kinematic = KiteControl.kinematicRaw2Dict(raw)
+    // pass on data to webcontrol
+    if (DEVICES.WEBCONTROL in wss) {
+      wss[DEVICES.WEBCONTROL].send(raw, {binary: true, masked: true})
+    }
+    if (logging) {
+      // add timestamp
+      kinematic['t'] = (new Date() - startTime)/1000
+      kinematicLog.push(kinematic)
+    }
+
+    kiteControl.update(kinematic)
   }
-}, 100)
+}
+
+
+
+
+console.log("MISSION CONTROL IS LIVE");

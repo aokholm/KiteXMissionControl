@@ -74,11 +74,29 @@
 	window.trackingPlot = new Plotter("trackingPlot", 400, 400)
 
 	document.onkeypress = function (e) {
-	    e = e || window.event;
-	    if (e.keyCode === 97) {
+	    var charCode = (typeof e.which == "number") ? e.which : e.keyCode
+	    
+	    if (charCode === 97) { // a
 	      wsc.toggleAI()
 	    }
-	};
+
+	    if (charCode === 122) { // z
+	      wsc.zero()
+	    }
+
+	    if (charCode === 109) { // m
+
+	    }
+
+	    if (charCode === 100) { // d
+	      wsc.ws.send("ai,dirDecrement")
+	    }
+
+	    if (charCode === 105) { // i
+	      wsc.ws.send("ai,dirIncrement")
+	    }
+	}
+
 
 	wsc.connect()
 
@@ -3494,7 +3512,7 @@
 	            break;
 	          default:
 	        }
-	      break
+	        break
 	      case 'motor':
 	        console.log(data)
 	        switch (value) {
@@ -3513,13 +3531,13 @@
 	          default:
 
 	        }
-	      break
+	        break
 	      case 'bat1':
 	        document.getElementById("bat1").innerHTML = parseFloat(value).toFixed(2)
-	      break
+	        break
 	      case 'phoneBat':
 	        document.getElementById("phoneBat").innerHTML = (100*parseFloat(value)).toFixed(2)
-	      break
+	        break
 	      case 'camera':
 	        console.log(data)
 	        switch (value) {
@@ -3530,7 +3548,7 @@
 	            document.getElementById("cameraTrackingBox").checked = false
 	            break;
 	        }
-	      break
+	        break
 	      case 'ai':
 	        console.log(data)
 	        switch (value) {
@@ -3541,13 +3559,17 @@
 	            document.getElementById("aiBox").checked = false
 	            break;
 	        }
-	      break
+	        break
 	      case 'dir':
 	        document.getElementById("dir").innerHTML = parseFloat(value).toFixed(2)
-	      break
+	        break
 	      case 'dirCount':
 	        document.getElementById("dirCount").innerHTML = parseFloat(value).toFixed(2)
-	      break
+	        break
+	      case 'aiControlValue':
+	        console.log(value);
+	        document.getElementById("sliderControl").value = parseFloat(value)*1000
+	        break
 
 	      default:
 	        console.log(data)
