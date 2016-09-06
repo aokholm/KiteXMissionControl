@@ -6,7 +6,7 @@ import numpy as np
 
 from mpl_toolkits.mplot3d import Axes3D
 
-with open('sessions/2016-08-31T15:58:24.540Z-session.json') as data_file:
+with open('sessions/2016-09-05T09:56:27.739Z-session.json') as data_file:
     data = json.load(data_file)
 
 
@@ -50,8 +50,7 @@ t = [kinematic['t'] for kinematic in kinematics]
 # POSITION
 x = [kinematic['pos']['x'] for kinematic in kinematics]
 y = [kinematic['pos']['y'] for kinematic in kinematics]
-
-
+d = [kinematic['pos']['dir'] for kinematic in kinematics]
 
 # PLOT
 
@@ -84,7 +83,6 @@ if True:
     plt.figure()
     plt.plot(x,y)
     plt.show()
-
 
 # 3DPlot
 if False:

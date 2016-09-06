@@ -75,7 +75,7 @@
 
 	document.onkeypress = function (e) {
 	    var charCode = (typeof e.which == "number") ? e.which : e.keyCode
-	    
+
 	    if (charCode === 97) { // a
 	      wsc.toggleAI()
 	    }
@@ -97,8 +97,55 @@
 	    }
 	}
 
-
 	wsc.connect()
+
+	function request(path) {
+	  return new Promise( function(resolve, reject) {
+	    var xhr = new XMLHttpRequest();
+	    xhr.open("GET", path, true)
+	    xhr.onload = function (e) {
+	      if (xhr.readyState === 4) {
+	        if (xhr.status === 200) {
+	          resolve(JSON.parse(xhr.responseText))
+	        } else {
+	          reject(xhr.statusText)
+	        }
+	      }
+	    }
+	    xhr.onerror = function (e) {
+	      reject(xhr.statusText)
+	    }
+	    xhr.send(null)
+	  })
+	}
+
+	var sessionList = document.getElementById("sessionList")
+	sessionList.onclick = function(e) {
+	  var index = Array.prototype.indexOf.call(e.target.parentNode.children, e.target)
+
+	  request("/sessions/" + index)
+	  .then( function(result) {
+	    for (var kinematic of result.kinematic) {
+	      trackingPlot.plotKite(kinematic.pos.x, kinematic.pos.y, kinematic.pos.dir)
+	    }
+
+	  })
+	  .catch( function(err) {
+	    console.error(err, "ouch")
+	  })
+	}
+
+	request("/sessions")
+	.then( function(result) {
+	  for (var session of result) {
+	    var li = document.createElement("li")
+	    li.innerHTML = session
+	    sessionList.appendChild(li)
+	  }
+	})
+	.catch(function(err) {
+	  console.error("ups", err)
+	})
 
 
 /***/ },
@@ -3294,7 +3341,7 @@
 	  this.dir = 0
 	  this.network = network
 	  this.kinematicBuffer = []
-	  this.bufferSize = 7
+	  this.bufferSize = 3
 	  this.autonomous = false
 	}
 
@@ -3321,21 +3368,21 @@
 	    var dx = k2.pos.x - k1.pos.x
 	    var dy = k2.pos.y - k1.pos.y
 
-	    if ((dx*dx+dy*dy) < 0.0008) return // needs to move atleast 2 percet of screen
+	    if ((dx*dx+dy*dy) > 0.00002) { // needs to move atleast 1 percet of screen
+	      var newDir = Math.atan2(dy, dx) // counter clockclock-wise, with positive x as reference
 
-	    var newDir = Math.atan2(dy, dx) // counter clockclock-wise, with positive x as reference
+	      newDir = Math.PI/2 - newDir
+	      if (newDir < 0) {
+	        newDir += 2*Math.PI
+	      }
+	      var angleChange = newDir - this.direction
 
-	    newDir = Math.PI/2 - newDir
-	    if (newDir < 0) {
-	      newDir += 2*Math.PI
+	      if (Math.abs(angleChange) > 3/2*Math.PI) {
+	        this.directionCount -= Math.sign(angleChange)
+	      }
+
+	      this.direction = newDir
 	    }
-	    var angleChange = newDir - this.direction
-
-	    if (Math.abs(angleChange) > 3/2*Math.PI) {
-	      this.directionCount -= Math.sign(angleChange)
-	    }
-
-	    this.direction = newDir
 
 	    return this.directionCount * 2 * Math.PI + this.direction
 	  },

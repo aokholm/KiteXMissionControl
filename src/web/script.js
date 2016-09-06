@@ -29,7 +29,7 @@ window.trackingPlot = new Plotter("trackingPlot", 400, 400)
 
 document.onkeypress = function (e) {
     var charCode = (typeof e.which == "number") ? e.which : e.keyCode
-    
+
     if (charCode === 97) { // a
       wsc.toggleAI()
     }
@@ -51,5 +51,52 @@ document.onkeypress = function (e) {
     }
 }
 
-
 wsc.connect()
+
+function request(path) {
+  return new Promise( function(resolve, reject) {
+    var xhr = new XMLHttpRequest();
+    xhr.open("GET", path, true)
+    xhr.onload = function (e) {
+      if (xhr.readyState === 4) {
+        if (xhr.status === 200) {
+          resolve(JSON.parse(xhr.responseText))
+        } else {
+          reject(xhr.statusText)
+        }
+      }
+    }
+    xhr.onerror = function (e) {
+      reject(xhr.statusText)
+    }
+    xhr.send(null)
+  })
+}
+
+var sessionList = document.getElementById("sessionList")
+sessionList.onclick = function(e) {
+  var index = Array.prototype.indexOf.call(e.target.parentNode.children, e.target)
+
+  request("/sessions/" + index)
+  .then( function(result) {
+    for (var kinematic of result.kinematic) {
+      trackingPlot.plotKite(kinematic.pos.x, kinematic.pos.y, kinematic.pos.dir)
+    }
+
+  })
+  .catch( function(err) {
+    console.error(err, "ouch")
+  })
+}
+
+request("/sessions")
+.then( function(result) {
+  for (var session of result) {
+    var li = document.createElement("li")
+    li.innerHTML = session
+    sessionList.appendChild(li)
+  }
+})
+.catch(function(err) {
+  console.error("ups", err)
+})

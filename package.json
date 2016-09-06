@@ -4,12 +4,14 @@
   "description": "",
   "main": "main.js",
   "scripts": {
-    "pack": "webpack",
-    "start": "node src/main.js"
+    "start": "concurrently --kill-others \"webpack\" \"node src/socket.js\" \"node src/server.js\""
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "concurrently": "^2.2.0",
+    "hapi": "^15.0.3",
+    "inert": "^4.0.2",
     "jsonfile": "^2.3.1",
     "synaptic": "^1.0.8",
     "ws": "^1.1.1"

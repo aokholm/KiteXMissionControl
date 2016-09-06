@@ -8,7 +8,7 @@ function KiteControl(network) {
   this.dir = 0
   this.network = network
   this.kinematicBuffer = []
-  this.bufferSize = 7
+  this.bufferSize = 3
   this.autonomous = false
 }
 
@@ -35,21 +35,21 @@ KiteControl.prototype = {
     var dx = k2.pos.x - k1.pos.x
     var dy = k2.pos.y - k1.pos.y
 
-    if ((dx*dx+dy*dy) < 0.0008) return // needs to move atleast 2 percet of screen
+    if ((dx*dx+dy*dy) > 0.00002) { // needs to move atleast 1 percet of screen
+      var newDir = Math.atan2(dy, dx) // counter clockclock-wise, with positive x as reference
 
-    var newDir = Math.atan2(dy, dx) // counter clockclock-wise, with positive x as reference
+      newDir = Math.PI/2 - newDir
+      if (newDir < 0) {
+        newDir += 2*Math.PI
+      }
+      var angleChange = newDir - this.direction
 
-    newDir = Math.PI/2 - newDir
-    if (newDir < 0) {
-      newDir += 2*Math.PI
+      if (Math.abs(angleChange) > 3/2*Math.PI) {
+        this.directionCount -= Math.sign(angleChange)
+      }
+
+      this.direction = newDir
     }
-    var angleChange = newDir - this.direction
-
-    if (Math.abs(angleChange) > 3/2*Math.PI) {
-      this.directionCount -= Math.sign(angleChange)
-    }
-
-    this.direction = newDir
 
     return this.directionCount * 2 * Math.PI + this.direction
   },
