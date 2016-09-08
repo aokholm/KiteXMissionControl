@@ -1,7 +1,6 @@
 // export
 module.exports = KiteControl
 
-// Your code goes here
 function KiteControl(network) {
   this.direction = 0
   this.directionCount = 0

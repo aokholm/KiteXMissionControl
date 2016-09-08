@@ -48,10 +48,108 @@
 	var KiteControl = __webpack_require__(9)
 	var Plotter = __webpack_require__(10)
 	var WebSocketController = __webpack_require__(11)
+	var Simulation = __webpack_require__(12)
+	var fuse = __webpack_require__(13)
 
 	window.wsc = new WebSocketController()
 
+
+	function MotorController() {
+	  this.currentPoint = 0
+	  this.lad = 0.15 // look ahead distance
+	}
+
+	MotorController.prototype = {
+	  loadTrack: function(track) {
+	    this.track = track
+	  },
+
+	  motorPos: function(x, y, direction, velocity) {
+	    return this.update([x, y], direction)
+	  },
+
+	  update: function(kPos, omega) {
+	    // iterate until a point is outside Look ahead distance
+	    var l = this.distance(this.point(), kPos)
+
+	    while (l < this.lad) {
+	      this.next()
+	      l = this.distance(this.point(), kPos)
+	    }
+
+	    omega = (omega + 100*Math.PI) % (2*Math.PI) // works for up to 50 negative rotations
+
+	    var theta_e = (this.angleToPoint(this.point(), kPos) - omega) % (2*Math.PI)// should concider warp arround
+
+	    if (theta_e < -Math.PI) {
+	      theta_e += 2*Math.PI
+	    }
+	    if (theta_e > Math.PI) {
+	      theta_e -= 2*Math.PI
+	    }
+	    var gamma = 2*theta_e / l
+
+	    return gamma*150 // formula derived from observations
+	  },
+
+	  angleToPoint(pTo, pFrom) {
+	    var dx = pTo[0] - pFrom[0]
+	    var dy = pTo[1] - pFrom[1]
+	    return Math.atan2(dy, dx)
+	  },
+
+	  distance: function(p1, p2) {
+	    var dx = p1[0] - p2[0]
+	    var dy = p1[1] - p2[1]
+	    return Math.sqrt(dx*dx + dy*dy)
+	  },
+
+	  point: function() {
+	    return this.track[this.currentPoint]
+	  },
+
+	  next: function() {
+	    this.currentPoint += 1
+	    if (this.currentPoint == this.track.length) {
+	      this.currentPoint = 0
+	    }
+	    return this.track[this.currentPoint]
+	  }
+
+	}
+
+	var track = [
+	  [0.2, 0.2],
+	  [0.2, 0.5],
+	  [0.8, 0.2],
+	  [0.8, 0.5]
+	]
+
+
+
+	var motorController = new MotorController()
 	var kiteControl = new KiteControl(ai.network)
+	window.trackingPlot = new Plotter("trackingPlot", 400, 400)
+	window.simulation = new Simulation(trackingPlot, motorController)
+	simulation.setup()
+	// simulation.start()
+
+	var pathTrackingDiv = document.getElementById("pathTracking")
+	var ptStart = createButton("start", "startSimulation()")
+	var ptClear = createButton("clear", "clearTrack()")
+	pathTrackingDiv.appendChild(ptStart)
+	pathTrackingDiv.appendChild(ptClear)
+
+	window.startSimulation = function() {
+	  motorController.loadTrack(points.map(function(e) {
+	    return [e[0]/400, e[1]/400]
+	  }))
+	  simulation.start()
+	}
+
+	window.clearTrack = function() {
+	  points = []
+	}
 
 	wsc.onBinary = function(data) {
 	  kiteControl.update(KiteControl.kinematicRaw2Dict(data))
@@ -60,7 +158,7 @@
 	kiteControl.onUpdate = function(kinematic) {
 	  var line = kiteControl.lastLineSegment()
 	  if (line !== null) {
-	    trackingPlot.plotLine(line)
+	    trackingPlot.plotLineNormalized(line)
 	  }
 	  trackingPlot.plotKite(kinematic.pos.x, kinematic.pos.y, kinematic.pos.dir)
 
@@ -71,7 +169,48 @@
 	  document.getElementById("posdir").innerHTML = kinematic.pos.dir
 	}
 
-	window.trackingPlot = new Plotter("trackingPlot", 400, 400)
+
+	trackingPlot.canvas.addEventListener("mousemove", function (e) {
+	      findxy('move', e)
+	  }, false);
+	trackingPlot.canvas.addEventListener("mousedown", function (e) {
+	    findxy('down', e)
+	}, false);
+	trackingPlot.canvas.addEventListener("mouseup", function (e) {
+	    findxy('up', e)
+	}, false);
+	trackingPlot.canvas.addEventListener("mouseout", function (e) {
+	    findxy('out', e)
+	}, false);
+
+	var points = [] // reverse order
+	var flag = false
+	function findxy(res, e) {
+	    var point = findPoint(e, trackingPlot.canvas)
+	    if (res == 'down') {
+	        flag = true
+	        points.unshift(point)
+	    }
+	    if (res == 'up' || res == "out") {
+	        flag = false
+	    }
+
+	    if (res == 'move') {
+	        if (flag) {
+	            points.unshift(point)
+	            drawLastSegment()
+	        }
+	    }
+	}
+
+	function drawLastSegment() {
+	  line = [points[0], points[1]]
+	  trackingPlot.plotLine(line)
+	}
+
+	function findPoint(e, canvas) {
+	  return [e.clientX - canvas.offsetLeft, e.clientY - canvas.offsetTop]
+	}
 
 	document.onkeypress = function (e) {
 	    var charCode = (typeof e.which == "number") ? e.which : e.keyCode
@@ -99,6 +238,10 @@
 
 	wsc.connect()
 
+
+
+
+	/*** POST ANALYSIS **/
 	function request(path) {
 	  return new Promise( function(resolve, reject) {
 	    var xhr = new XMLHttpRequest();
@@ -119,17 +262,34 @@
 	  })
 	}
 
+	var plotSlider = createSlider({"oninput": "updateLivePlot()"})
+	var livePlotData
+
+	window.updateLivePlot = function() {
+
+	  var fused1 = fuse(livePlotData, plotSlider.value/1000) // up to one second
+	  // var fused2 = fuse(result, 0.5)
+	  // var fused3 = fuse(result, 1.0)
+	  trackingPlot.clear()
+	  // trackingPlot.plotPointsNormalize(fused1, {ymax: 10, ymin: -10, color: "222"})
+	  trackingPlot.plotPointsNormalize(fused1, {ymax: 20, ymin: -20, color: "222"})
+	  // trackingPlot.plotPointsNormalize(fused2, {ymax: 10, ymin: -10, color: "0F0"})
+	  // trackingPlot.plotPointsNormalize(fused3, {ymax: 10, ymin: -10, color: "00F"})
+	}
+
+
 	var sessionList = document.getElementById("sessionList")
+	sessionList.appendChild(plotSlider)
+
+
 	sessionList.onclick = function(e) {
 	  var index = Array.prototype.indexOf.call(e.target.parentNode.children, e.target)
 
 	  request("/sessions/" + index)
 	  .then( function(result) {
-	    for (var kinematic of result.kinematic) {
-	      trackingPlot.plotKite(kinematic.pos.x, kinematic.pos.y, kinematic.pos.dir)
-	    }
-
-	  })
+	    livePlotData = result
+	    updateLivePlot()
+	    })
 	  .catch( function(err) {
 	    console.error(err, "ouch")
 	  })
@@ -146,6 +306,56 @@
 	.catch(function(err) {
 	  console.error("ups", err)
 	})
+
+
+	function createButton(text, action) {
+	  var button = document.createElement("button")
+	  button.setAttribute("onclick", action)
+	  button.innerHTML = text
+	  return button
+	}
+
+	function createSlider(options) {
+	  var slider = document.createElement("input")
+	  var defaults = {
+	    "type": "range",
+	    "min": 0,
+	    "max": 1000,
+	    "step": 1,
+	    "style": "width:400px"
+	  }
+	  options = merge(defaults, options || {})
+
+	  Object.keys(options).forEach( function(key) {
+	    slider.setAttribute(key, options[key])
+	  })
+	  return slider
+	}
+
+
+	function merge() {
+	    var obj, name, copy,
+	        target = arguments[0] || {},
+	        i = 1,
+	        length = arguments.length;
+
+	    for (; i < length; i++) {
+	        if ((obj = arguments[i]) != null) {
+	            for (name in obj) {
+	                copy = obj[name];
+
+	                if (target === copy) {
+	                    continue;
+	                }
+	                else if (copy !== undefined) {
+	                    target[name] = copy;
+	                }
+	            }
+	        }
+	    }
+
+	    return target;
+	}
 
 
 /***/ },
@@ -3334,7 +3544,6 @@
 	// export
 	module.exports = KiteControl
 
-	// Your code goes here
 	function KiteControl(network) {
 	  this.direction = 0
 	  this.directionCount = 0
@@ -3439,14 +3648,50 @@
 	}
 
 	Plotter.prototype = {
-	  plotLine: function(line, color) {
-	    // draw the kite
-	    this.context.strokeStyle = "#000000";
-	    if (color) {
-	      this.context.strokeStyle = "#" + color;
+	  plotLineNormalized: function(line, options) {
+	    line = line.map(function(p) {return [p[0]*this.canvas.width, (1-p[1])*this.canvas.height]}, this)
+	    this.plotLine(line, options)
+	  },
+
+	  plotLineNormalize: function(line, options) {
+	    this.plotLine(this.normalize(line, options), options)
+	  },
+
+	  normalize: function(points, options) {
+	    var xs = points.map(function(p){return p[0]})
+	    var ys = points.map(function(p){return p[1]})
+	    var xmin = options.xmin || Math.min(...xs)
+	    var xmax = options.xmax || Math.max(...xs)
+	    var ymin = options.ymin || Math.min(...ys)
+	    var ymax = options.ymax || Math.max(...ys)
+	    console.log(xmin, xmax, ymin, ymax);
+
+	    points = points.map(function(p) {
+	      return [
+	        (p[0]-xmin) / (xmax - xmin ) * this.canvas.width,
+	        (1- (p[1]-ymin) / (ymax - ymin ) ) * this.canvas.height
+	      ]}, this)
+
+	    return points
+	  },
+
+	  plotPointsNormalize: function(points, options) {
+	    this.plotPoints(this.normalize(points, options), options)
+	  },
+
+	  plotPoints: function(points, options) {
+
+	    this.context.fillStyle = options.color || "#000000"
+	    for (p of points) {
+	      this.context.fillRect(p[0]-2, p[1]-2, 4, 4)
 	    }
 
-	    line = line.map(function(p) {return [p[0]*this.canvas.width, (1-p[1])*this.canvas.height]}, this)
+	  },
+
+	  plotLine: function(line, options) {
+	    // draw the kite
+	    var ops = options || {} 
+	    this.context.strokeStyle = ops.color || "#000000"
 
 	    this.context.lineWidth=1;
 	    this.context.beginPath();
@@ -3459,16 +3704,17 @@
 	  },
 
 	  plotKite: function(x, y, dir) {
+
 	    this.context.fillStyle = "red";
 	    this.context.save(); // save the unrotated context of the canvas so we can restore it later
-	    this.context.translate(x*this.canvas.width, (1-y)*this.canvas.height); // move to the point of the kite
+	    this.context.translate(x*this.canvas.width, y*this.canvas.height); // move to the point of the kite
 	    this.context.rotate(dir); // rotate the canvas to the specified degrees
 
 	    // draw the kite
 	    this.context.beginPath();
-	    this.context.moveTo(-2, 4);
-	    this.context.lineTo(0,-4);
-	    this.context.lineTo(2, 4);
+	    this.context.moveTo(-4, 2);
+	    this.context.lineTo(4, 0);
+	    this.context.lineTo(-4, -2);
 	    this.context.closePath();
 	    this.context.fill();
 
@@ -3478,6 +3724,30 @@
 	  clear : function() {
 	    this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
 	  },
+	}
+
+	function merge() {
+	    var obj, name, copy,
+	        target = arguments[0] || {},
+	        i = 1,
+	        length = arguments.length;
+
+	    for (; i < length; i++) {
+	        if ((obj = arguments[i]) != null) {
+	            for (name in obj) {
+	                copy = obj[name];
+
+	                if (target === copy) {
+	                    continue;
+	                }
+	                else if (copy !== undefined) {
+	                    target[name] = copy;
+	                }
+	            }
+	        }
+	    }
+
+	    return target;
 	}
 
 
@@ -3637,6 +3907,235 @@
 	    this.ai = !this.ai
 	    this.ai ? this.ws.send('ai,on') : this.ws.send('ai,off')
 	  }
+	}
+
+
+/***/ },
+/* 12 */
+/***/ function(module, exports) {
+
+	// export
+	module.exports = Simulation
+
+	function Simulation(plotter, controller) {
+	  this.plotter = plotter
+	  this.controller = controller
+	  this.updateInterval = 0.01 //s
+	}
+
+	Simulation.prototype = {
+
+	  setup : function() {
+	    this.frameNo = 0;
+	    var x = 0.5
+	    var y = 0.3 // 3/4 is max
+	    var dir = -Math.PI/2
+	    this.kite = new KiteComponent(x, y, dir, this.controller)
+	    this.draw()
+	  },
+
+	  start : function() {
+	    this.interval = setInterval(this.loop.bind(this), this.updateInterval*1000)
+	  },
+
+	  stop : function() {
+	    clearInterval(this.interval)
+	  },
+
+	  pause : function(time) {
+	    return new Promise( function(resolve, reject) {
+	      setTimeout( function() {
+	        resolve()
+	      }, time)
+	    })
+	  },
+
+	  loop : function() {
+	    this.updateLogic(0.01)
+	    this.draw()
+	  },
+
+	  updateLogic : function(dt) { // seconds
+	    this.frameNo += 1
+	    this.kite.update(dt)
+
+	    if (this.kite.outOfBounds()) {
+	      this.gameOver(false)
+	    }
+	    if (this.frameNo == 1000) {
+	      this.gameOver(true) // sucessfully ended the game
+	    }
+	  },
+
+	  draw : function() {
+	    this.plotter.clear()
+	    this.plotter.plotKite(this.kite.x, this.kite.y, this.kite.direction)
+	  },
+
+	  gameOver : function(success) {
+
+	    clearInterval(this.interval)
+
+	    this.pause(500)
+	    .then(function () {
+	      simulation.setup()
+	      return simulation.pause(500)
+	    })
+	    .then( function() {
+	      simulation.start()
+	    })
+	  },
+	}
+
+	function Motor() {
+	  this.pos = 0 // value from 1000 to 0
+	  this.speed = 4000 // pos per second // missing acceleration
+	  this.omegaDot = 0
+
+	  this.update = function( targetPos, dt ) {
+	    if (targetPos != this.pos) {
+	      this.pos += Math.sign( targetPos - this.pos) * Math.min(this.speed*dt, Math.abs(targetPos - this.pos));
+	      this.omegaDot = this.pos * 0.00314; // change up for 5 degrees per increment
+	    }
+	  }
+	}
+
+	function KiteComponent(x, y, dir, controller) {
+	  this.x = x
+	  this.y = y
+	  this.direction = dir
+	  this.velocity = 0.25 // units per second
+	  this.controller = controller
+
+	  this.motor = new Motor()
+
+	  this.update = function(dt) {
+	    this.motor.update(this.controller.motorPos(this.x, this.y, this.direction, this.velocity), dt)
+	    this.direction += this.motor.omegaDot*dt;
+	    this.x += Math.cos(this.direction) * this.velocity * dt;
+	    this.y += Math.sin(this.direction) * this.velocity * dt;
+	  }
+
+	  this.outOfBounds = function() {
+	    return (this.x < 0 || this.x > 1 || this.y < 0 || this.y > 3/4)
+	  }
+
+	  this.generateTrace = function(canvas, maxStep) {
+	    var position = [];
+	    for (var i=0; i< maxStep; i++) {
+	      position.push([this.x, this.y])
+	      this.newPos(this.network.activate(this.normInput(canvas))[0]*1000)
+	      if (this.outOfBounds(canvas)) {
+	        break
+	      }
+	    }
+	    return position
+	  }
+	}
+
+	function merge() {
+	    var obj, name, copy,
+	        target = arguments[0] || {},
+	        i = 1,
+	        length = arguments.length;
+
+	    for (; i < length; i++) {
+	        if ((obj = arguments[i]) != null) {
+	            for (name in obj) {
+	                copy = obj[name];
+
+	                if (target === copy) {
+	                    continue;
+	                }
+	                else if (copy !== undefined) {
+	                    target[name] = copy;
+	                }
+	            }
+	        }
+	    }
+
+	    return target;
+	}
+
+
+/***/ },
+/* 13 */
+/***/ function(module, exports) {
+
+	module.exports = fuse
+
+	function fuse(dataset, controlLag) {
+	  var kinematic = dataset.kinematic
+	  var control = dataset.control
+
+
+	  // /*** CONTROL LAG ****/
+	  // RADIUS
+	  var radius = []
+	  for (var i = 1; i < kinematic.length; i++) {
+	    var diff = kinematic[i].pos.dir - kinematic[i-1].pos.dir
+	    radius.push( distance(kinematic[i], kinematic[i-1]) / diff   )
+	  }
+	  // gamma (curvature)
+	  var gamma = []
+	  for (var i = 1; i < kinematic.length; i++) {
+	    var diff = kinematic[i].pos.dir - kinematic[i-1].pos.dir
+	    gamma.push( diff / distance(kinematic[i], kinematic[i-1])  )
+	  }
+
+
+	  // OMEGA DOT
+	  var omagaDot = []
+	  for (var i = 1; i < kinematic.length; i++) {
+	    var diff = kinematic[i].pos.dir - kinematic[i-1].pos.dir
+	    omagaDot.push( diff / (kinematic[i].time - kinematic[i-1].time )   )
+	  }
+
+
+
+	  var controlIndex = []
+	  var ki = 0
+	  for (var i = 0; i < control.length-1; i++) {
+	    while (kinematic[ki].t < control[i+1].t + controlLag && ki < kinematic.length) {
+	      controlIndex.push(i)
+	      ki += 1
+	      if (ki == kinematic.length) {break}
+	    }
+	  }
+
+	  controlIndex.pop()
+
+	  return controlIndex.map( function(e, i){
+	    return [control[e].p, gamma[i]]
+	  })
+
+	  function distance(k1, k2) {
+	    var dx = k1.pos.x - k2.pos.x
+	    var dy = k1.pos.y - k2.pos.y
+	    return Math.sqrt(dx*dx+dy*dy)
+	  }
+
+
+	  //*** VELOCITY ***/
+	  // function vel(k1, k2) {
+	  //   var dx = k1.pos.x - k2.pos.x
+	  //   var dy = k1.pos.y - k2.pos.y
+	  //   var dt = k1.time - k2.time
+	  //   return Math.sqrt( dx*dx + dy*dy ) / dt
+	  // }
+	  //
+	  //
+	  // var velocity = []
+	  // for (var i = 1; i < kinematic.length; i++) {
+	  //   velocity.push( vel(kinematic[i], kinematic[i-1]) )
+	  // }
+	  //
+	  // return velocity.map( function(e, i) {
+	  //   return [kinematic[i+1].t, e]
+	  // })
+
+
+
 	}
 
 
