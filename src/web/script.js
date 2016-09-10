@@ -4,125 +4,77 @@ var Plotter = require("./plotter.js")
 var WebSocketController = require("./webSocketController.js")
 var Simulation = require("../simulation")
 var fuse = require("../analysis/fuse.js")
+var MotorController = require("../motorControl")
+var KitePS = require("../kitePS")
+
+
 
 window.wsc = new WebSocketController()
-
-
-function MotorController() {
-  this.currentPoint = 0
-  this.lad = 0.15 // look ahead distance
-}
-
-MotorController.prototype = {
-  loadTrack: function(track) {
-    this.track = track
-  },
-
-  motorPos: function(x, y, direction, velocity) {
-    return this.update([x, y], direction)
-  },
-
-  update: function(kPos, omega) {
-    // iterate until a point is outside Look ahead distance
-    var l = this.distance(this.point(), kPos)
-
-    while (l < this.lad) {
-      this.next()
-      l = this.distance(this.point(), kPos)
-    }
-
-    omega = (omega + 100*Math.PI) % (2*Math.PI) // works for up to 50 negative rotations
-
-    var theta_e = (this.angleToPoint(this.point(), kPos) - omega) % (2*Math.PI)// should concider warp arround
-
-    if (theta_e < -Math.PI) {
-      theta_e += 2*Math.PI
-    }
-    if (theta_e > Math.PI) {
-      theta_e -= 2*Math.PI
-    }
-    var gamma = 2*theta_e / l
-
-    return gamma*150 // formula derived from observations
-  },
-
-  angleToPoint(pTo, pFrom) {
-    var dx = pTo[0] - pFrom[0]
-    var dy = pTo[1] - pFrom[1]
-    return Math.atan2(dy, dx)
-  },
-
-  distance: function(p1, p2) {
-    var dx = p1[0] - p2[0]
-    var dy = p1[1] - p2[1]
-    return Math.sqrt(dx*dx + dy*dy)
-  },
-
-  point: function() {
-    return this.track[this.currentPoint]
-  },
-
-  next: function() {
-    this.currentPoint += 1
-    if (this.currentPoint == this.track.length) {
-      this.currentPoint = 0
-    }
-    return this.track[this.currentPoint]
-  }
-
-}
-
-var track = [
-  [0.2, 0.2],
-  [0.2, 0.5],
-  [0.8, 0.2],
-  [0.8, 0.5]
-]
-
-
-
 var motorController = new MotorController()
 var kiteControl = new KiteControl(ai.network)
-window.trackingPlot = new Plotter("trackingPlot", 400, 400)
-window.simulation = new Simulation(trackingPlot, motorController)
-simulation.setup()
-// simulation.start()
+window.trackingPlot = new Plotter("trackingPlot", 400, 300)
+window.kitePS = new KitePS(motorController, trackingPlot, null)
 
 var pathTrackingDiv = document.getElementById("pathTracking")
 var ptStart = createButton("start", "startSimulation()")
 var ptClear = createButton("clear", "clearTrack()")
+var ptStop = createButton("stop", "stopKite()")
+var ptSend = createButton("sendTrack", "sendTrack()")
 pathTrackingDiv.appendChild(ptStart)
 pathTrackingDiv.appendChild(ptClear)
+pathTrackingDiv.appendChild(ptStop)
+pathTrackingDiv.appendChild(ptSend)
+
 
 window.startSimulation = function() {
-  motorController.loadTrack(points.map(function(e) {
+  motorController.loadTrack(points.reverse().map(function(e) {
     return [e[0]/400, e[1]/400]
   }))
-  simulation.start()
+  kitePS.start()
 }
 
 window.clearTrack = function() {
   points = []
 }
 
-wsc.onBinary = function(data) {
-  kiteControl.update(KiteControl.kinematicRaw2Dict(data))
+window.stopKite = function() {
+  kitePS.stop()
 }
 
-kiteControl.onUpdate = function(kinematic) {
-  var line = kiteControl.lastLineSegment()
-  if (line !== null) {
-    trackingPlot.plotLineNormalized(line)
+window.sendTrack = function() {
+  var buffer = new Float32Array(points.length*2)
+
+  var ps = points.reverse().map(function(e) {
+      return [e[0]/400, e[1]/400]
+    })
+
+  for (var i = 0; i < ps.length; i++) {
+    buffer[i*2] = ps[i][0]
+    buffer[i*2+1] = ps[i][1]
   }
-  trackingPlot.plotKite(kinematic.pos.x, kinematic.pos.y, kinematic.pos.dir)
 
-  // do SOMETHING
-  document.getElementById("time").innerHTML = kinematic.time
-  document.getElementById("posx").innerHTML = kinematic.pos.x
-  document.getElementById("posy").innerHTML = kinematic.pos.y
-  document.getElementById("posdir").innerHTML = kinematic.pos.dir
+  wsc.ws.send(buffer)
 }
 
+wsc.onBinary = function(data) {
+  kitePS.newTrackingData(KiteControl.kinematicRaw2Dict(data))
+}
+
+// kiteControl.onUpdate = function(kinematic) {
+//   var line = kiteControl.lastLineSegment()
+//   if (line !== null) {
+//     trackingPlot.plotLineNormalized(line)
+//   }
+//   trackingPlot.plotKite(kinematic.pos.x, kinematic.pos.y, kinematic.pos.dir)
+//
+//   document.getElementById("time").innerHTML = kinematic.time
+//   document.getElementById("posx").innerHTML = kinematic.pos.x
+//   document.getElementById("posy").innerHTML = kinematic.pos.y
+//   document.getElementById("posdir").innerHTML = kinematic.pos.dir
+// }
+
+
+/** DRAWING A PATH ***/
 
 trackingPlot.canvas.addEventListener("mousemove", function (e) {
       findxy('move', e)
@@ -178,7 +130,7 @@ document.onkeypress = function (e) {
     }
 
     if (charCode === 109) { // m
-
+      wsc.toggleMotor()
     }
 
     if (charCode === 100) { // d
@@ -187,6 +139,14 @@ document.onkeypress = function (e) {
 
     if (charCode === 105) { // i
       wsc.ws.send("ai,dirIncrement")
+    }
+
+    if (charCode === 115) { // s
+      wsc.ws.send("camera,capture")
+    }
+
+    if (charCode === 108) { // l
+      wsc.toggleLogging()
     }
 }
 
@@ -216,25 +176,81 @@ function request(path) {
   })
 }
 
-var plotSlider = createSlider({"oninput": "updateLivePlot()"})
-var livePlotData
+// var plotSlider = createSlider({"oninput": "updateLivePlot()"})
+// var livePlotData
+//
+// window.updateLivePlot = function() {
+//
+//   var fused1 = fuse(livePlotData, plotSlider.value/1000) // up to one second
+//   // var fused2 = fuse(result, 0.5)
+//   // var fused3 = fuse(result, 1.0)
+//   trackingPlot.clear()
+//   // trackingPlot.plotPointsNormalize(fused1, {ymax: 10, ymin: -10, color: "222"})
+//   trackingPlot.plotPointsNormalize(fused1, {ymax: 20, ymin: -20, color: "222"})
+//   // trackingPlot.plotPointsNormalize(fused2, {ymax: 10, ymin: -10, color: "0F0"})
+//   // trackingPlot.plotPointsNormalize(fused3, {ymax: 10, ymin: -10, color: "00F"})
+// }
+//
+//
+// var sessionList = document.getElementById("sessionList")
+// sessionList.appendChild(plotSlider)
 
-window.updateLivePlot = function() {
+var kinematic
+var control
+var kinematicIndex = 0
+var controlIndex = 0
 
-  var fused1 = fuse(livePlotData, plotSlider.value/1000) // up to one second
-  // var fused2 = fuse(result, 0.5)
-  // var fused3 = fuse(result, 1.0)
-  trackingPlot.clear()
-  // trackingPlot.plotPointsNormalize(fused1, {ymax: 10, ymin: -10, color: "222"})
-  trackingPlot.plotPointsNormalize(fused1, {ymax: 20, ymin: -20, color: "222"})
-  // trackingPlot.plotPointsNormalize(fused2, {ymax: 10, ymin: -10, color: "0F0"})
-  // trackingPlot.plotPointsNormalize(fused3, {ymax: 10, ymin: -10, color: "00F"})
+function nextKinematic() {
+  kitePS.newTrackingData(kinematic[kinematicIndex])
+  console.log(kinematic[kinematicIndex].t);
+  if (kinematicIndex < kinematic.length -2 ) { // < 5 ) {
+    setTimeout(nextKinematic, (kinematic[kinematicIndex+1].time - kinematic[kinematicIndex].time)*1000)
+    kinematicIndex += 1
+  }
 }
 
+function nextControl() {
+  kitePS.newMotorPosition(control[controlIndex])
+  if (controlIndex < 5) { //control.length-2) {
+    setTimeout(nextControl, (control[controlIndex+1].t - control[controlIndex].t)*1000)
+    controlIndex += 1
+  }
+}
 
-var sessionList = document.getElementById("sessionList")
-sessionList.appendChild(plotSlider)
+function simulate(session) {
+  kinematic = session.kinematic
+  control = session.control
 
+  kitePS.stop()
+  trackingPlot.clear()
+
+
+
+  var kOffset = kinematic[kinematicIndex].time
+  var cOffset = -kinematic[0].t
+
+  kinematic = kinematic.map(function(e) {
+    e.time -= kOffset
+    e.pos.y = (1-e.pos.y)*3/4
+    return e
+  })
+  control = control.map(function(e) {
+    e.t -= cOffset
+    return e
+  })
+  //
+  setTimeout(function() {
+    nextKinematic()
+  }, kinematic[0].time)
+
+  // setTimeout(function() {
+  //   nextControl()
+  // }, control[0].t)
+
+
+  kitePS.start()
+
+}
 
 sessionList.onclick = function(e) {
   var index = Array.prototype.indexOf.call(e.target.parentNode.children, e.target)
@@ -242,7 +258,11 @@ sessionList.onclick = function(e) {
   request("/sessions/" + index)
   .then( function(result) {
     livePlotData = result
-    updateLivePlot()
+    simulate(result)
+
+    // updateLivePlot()
+
+
     })
   .catch( function(err) {
     console.error(err, "ouch")

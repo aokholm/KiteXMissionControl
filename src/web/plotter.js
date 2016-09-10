@@ -53,7 +53,7 @@ Plotter.prototype = {
 
   plotLine: function(line, options) {
     // draw the kite
-    var ops = options || {} 
+    var ops = options || {}
     this.context.strokeStyle = ops.color || "#000000"
 
     this.context.lineWidth=1;
@@ -70,7 +70,7 @@ Plotter.prototype = {
 
     this.context.fillStyle = "red";
     this.context.save(); // save the unrotated context of the canvas so we can restore it later
-    this.context.translate(x*this.canvas.width, y*this.canvas.height); // move to the point of the kite
+    this.context.translate(x*this.canvas.width, y*this.canvas.width); // move to the point of the kite
     this.context.rotate(dir); // rotate the canvas to the specified degrees
 
     // draw the kite

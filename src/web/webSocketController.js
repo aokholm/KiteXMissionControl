@@ -1,12 +1,10 @@
 module.exports = WebSocketController
 
 function WebSocketController() {
-  // this.controlAmplitude = 200 // +- 300 mm from
-  // this.controlOffSet = 0
-  // this.controlInput = 0
   this.lastMove = 0 // timer
-  this.buffer = new Int16Array(1)
   this.ai = false
+  this.logging = false
+  this.motor = false
 }
 
 WebSocketController.prototype = {
@@ -42,15 +40,14 @@ WebSocketController.prototype = {
   newControlSliderValue: function(val) {
     // do nothing if last move was less than 25 ms ago
     if(Date.now() - this.lastMove > 25 && !this.ai) {
-      // controlInput = (val/500-1) * 400 / 20 * controlAmplitude
-      this.buffer[0] = val // + controlOffSet
-      this.ws.send( this.buffer )
+      var buffer = new Int16Array(1)
+      buffer[0] = val
+      this.ws.send( buffer )
       this.lastMove = Date.now()
     }
   },
 
   zero: function() {
-    //controlOffSet += controlInput
     this.ws.send('motor,zero') // zero in the WebSocketServer
     document.getElementById("sliderControl").value = 500
   },
@@ -61,13 +58,12 @@ WebSocketController.prototype = {
     var command = input[0]
     var value = input[1]
     switch (command) {
-      case 'state':
-        console.log(data)
+      case 'logging':
         switch (value) {
-          case 'start':
+          case 'on':
             document.getElementById("loggingBox").checked = true
             break;
-          case 'stop':
+          case 'off':
             document.getElementById("loggingBox").checked = false
             break;
           default:
@@ -82,12 +78,6 @@ WebSocketController.prototype = {
           case 'off':
             document.getElementById("motorPowerBox").checked = false
             break;
-          // case 'online':
-          //   document.getElementById("motorConnected").checked = true
-          //   break;
-          // case 'offline':
-          //   document.getElementById("motorConnected").checked = false
-          //   break;
           default:
 
         }
@@ -149,5 +139,35 @@ WebSocketController.prototype = {
   toggleAI: function() {
     this.ai = !this.ai
     this.ai ? this.ws.send('ai,on') : this.ws.send('ai,off')
+  },
+
+  motorOn: function() {
+    this.motor = false
+    this.ws.send('motor,on')
+  },
+
+  motorOff: function() {
+    this.motor = false
+    this.ws.send('motor,off')
+  },
+
+  toggleMotor: function() {
+    this.motor = !this.motor
+    this.motor ? this.ws.send('motor,on') : this.ws.send('motor,off')
+  },
+
+  loggingOn: function() {
+    this.logging = false
+    this.ws.send('logging,on')
+  },
+
+  loggingOff: function() {
+    this.logging = false
+    this.ws.send('logging,off')
+  },
+
+  toggleLogging: function() {
+    this.logging = !this.logging
+    this.logging ? this.ws.send('logging,on') : this.ws.send('logging,off')
   }
 }

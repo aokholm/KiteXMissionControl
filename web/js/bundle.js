@@ -50,125 +50,77 @@
 	var WebSocketController = __webpack_require__(11)
 	var Simulation = __webpack_require__(12)
 	var fuse = __webpack_require__(13)
+	var MotorController = __webpack_require__(!(function webpackMissingModule() { var e = new Error("Cannot find module \"../motorControl\""); e.code = 'MODULE_NOT_FOUND'; throw e; }()))
+	var KitePS = __webpack_require__(15)
+
+
 
 	window.wsc = new WebSocketController()
-
-
-	function MotorController() {
-	  this.currentPoint = 0
-	  this.lad = 0.15 // look ahead distance
-	}
-
-	MotorController.prototype = {
-	  loadTrack: function(track) {
-	    this.track = track
-	  },
-
-	  motorPos: function(x, y, direction, velocity) {
-	    return this.update([x, y], direction)
-	  },
-
-	  update: function(kPos, omega) {
-	    // iterate until a point is outside Look ahead distance
-	    var l = this.distance(this.point(), kPos)
-
-	    while (l < this.lad) {
-	      this.next()
-	      l = this.distance(this.point(), kPos)
-	    }
-
-	    omega = (omega + 100*Math.PI) % (2*Math.PI) // works for up to 50 negative rotations
-
-	    var theta_e = (this.angleToPoint(this.point(), kPos) - omega) % (2*Math.PI)// should concider warp arround
-
-	    if (theta_e < -Math.PI) {
-	      theta_e += 2*Math.PI
-	    }
-	    if (theta_e > Math.PI) {
-	      theta_e -= 2*Math.PI
-	    }
-	    var gamma = 2*theta_e / l
-
-	    return gamma*150 // formula derived from observations
-	  },
-
-	  angleToPoint(pTo, pFrom) {
-	    var dx = pTo[0] - pFrom[0]
-	    var dy = pTo[1] - pFrom[1]
-	    return Math.atan2(dy, dx)
-	  },
-
-	  distance: function(p1, p2) {
-	    var dx = p1[0] - p2[0]
-	    var dy = p1[1] - p2[1]
-	    return Math.sqrt(dx*dx + dy*dy)
-	  },
-
-	  point: function() {
-	    return this.track[this.currentPoint]
-	  },
-
-	  next: function() {
-	    this.currentPoint += 1
-	    if (this.currentPoint == this.track.length) {
-	      this.currentPoint = 0
-	    }
-	    return this.track[this.currentPoint]
-	  }
-
-	}
-
-	var track = [
-	  [0.2, 0.2],
-	  [0.2, 0.5],
-	  [0.8, 0.2],
-	  [0.8, 0.5]
-	]
-
-
-
 	var motorController = new MotorController()
 	var kiteControl = new KiteControl(ai.network)
-	window.trackingPlot = new Plotter("trackingPlot", 400, 400)
-	window.simulation = new Simulation(trackingPlot, motorController)
-	simulation.setup()
-	// simulation.start()
+	window.trackingPlot = new Plotter("trackingPlot", 400, 300)
+	window.kitePS = new KitePS(motorController, trackingPlot, null)
 
 	var pathTrackingDiv = document.getElementById("pathTracking")
 	var ptStart = createButton("start", "startSimulation()")
 	var ptClear = createButton("clear", "clearTrack()")
+	var ptStop = createButton("stop", "stopKite()")
+	var ptSend = createButton("sendTrack", "sendTrack()")
 	pathTrackingDiv.appendChild(ptStart)
 	pathTrackingDiv.appendChild(ptClear)
+	pathTrackingDiv.appendChild(ptStop)
+	pathTrackingDiv.appendChild(ptSend)
+
 
 	window.startSimulation = function() {
-	  motorController.loadTrack(points.map(function(e) {
+	  motorController.loadTrack(points.reverse().map(function(e) {
 	    return [e[0]/400, e[1]/400]
 	  }))
-	  simulation.start()
+	  kitePS.start()
 	}
 
 	window.clearTrack = function() {
 	  points = []
 	}
 
-	wsc.onBinary = function(data) {
-	  kiteControl.update(KiteControl.kinematicRaw2Dict(data))
+	window.stopKite = function() {
+	  kitePS.stop()
 	}
 
-	kiteControl.onUpdate = function(kinematic) {
-	  var line = kiteControl.lastLineSegment()
-	  if (line !== null) {
-	    trackingPlot.plotLineNormalized(line)
+	window.sendTrack = function() {
+	  var buffer = new Float32Array(points.length*2)
+
+	  var ps = points.reverse().map(function(e) {
+	      return [e[0]/400, e[1]/400]
+	    })
+
+	  for (var i = 0; i < ps.length; i++) {
+	    buffer[i*2] = ps[i][0]
+	    buffer[i*2+1] = ps[i][1]
 	  }
-	  trackingPlot.plotKite(kinematic.pos.x, kinematic.pos.y, kinematic.pos.dir)
 
-	  // do SOMETHING
-	  document.getElementById("time").innerHTML = kinematic.time
-	  document.getElementById("posx").innerHTML = kinematic.pos.x
-	  document.getElementById("posy").innerHTML = kinematic.pos.y
-	  document.getElementById("posdir").innerHTML = kinematic.pos.dir
+	  wsc.ws.send(buffer)
 	}
 
+	wsc.onBinary = function(data) {
+	  kitePS.newTrackingData(KiteControl.kinematicRaw2Dict(data))
+	}
+
+	// kiteControl.onUpdate = function(kinematic) {
+	//   var line = kiteControl.lastLineSegment()
+	//   if (line !== null) {
+	//     trackingPlot.plotLineNormalized(line)
+	//   }
+	//   trackingPlot.plotKite(kinematic.pos.x, kinematic.pos.y, kinematic.pos.dir)
+	//
+	//   document.getElementById("time").innerHTML = kinematic.time
+	//   document.getElementById("posx").innerHTML = kinematic.pos.x
+	//   document.getElementById("posy").innerHTML = kinematic.pos.y
+	//   document.getElementById("posdir").innerHTML = kinematic.pos.dir
+	// }
+
+
+	/** DRAWING A PATH ***/
 
 	trackingPlot.canvas.addEventListener("mousemove", function (e) {
 	      findxy('move', e)
@@ -224,7 +176,7 @@
 	    }
 
 	    if (charCode === 109) { // m
-
+	      wsc.toggleMotor()
 	    }
 
 	    if (charCode === 100) { // d
@@ -233,6 +185,14 @@
 
 	    if (charCode === 105) { // i
 	      wsc.ws.send("ai,dirIncrement")
+	    }
+
+	    if (charCode === 115) { // s
+	      wsc.ws.send("camera,capture")
+	    }
+
+	    if (charCode === 108) { // l
+	      wsc.toggleLogging()
 	    }
 	}
 
@@ -262,25 +222,81 @@
 	  })
 	}
 
-	var plotSlider = createSlider({"oninput": "updateLivePlot()"})
-	var livePlotData
+	// var plotSlider = createSlider({"oninput": "updateLivePlot()"})
+	// var livePlotData
+	//
+	// window.updateLivePlot = function() {
+	//
+	//   var fused1 = fuse(livePlotData, plotSlider.value/1000) // up to one second
+	//   // var fused2 = fuse(result, 0.5)
+	//   // var fused3 = fuse(result, 1.0)
+	//   trackingPlot.clear()
+	//   // trackingPlot.plotPointsNormalize(fused1, {ymax: 10, ymin: -10, color: "222"})
+	//   trackingPlot.plotPointsNormalize(fused1, {ymax: 20, ymin: -20, color: "222"})
+	//   // trackingPlot.plotPointsNormalize(fused2, {ymax: 10, ymin: -10, color: "0F0"})
+	//   // trackingPlot.plotPointsNormalize(fused3, {ymax: 10, ymin: -10, color: "00F"})
+	// }
+	//
+	//
+	// var sessionList = document.getElementById("sessionList")
+	// sessionList.appendChild(plotSlider)
 
-	window.updateLivePlot = function() {
+	var kinematic
+	var control
+	var kinematicIndex = 0
+	var controlIndex = 0
 
-	  var fused1 = fuse(livePlotData, plotSlider.value/1000) // up to one second
-	  // var fused2 = fuse(result, 0.5)
-	  // var fused3 = fuse(result, 1.0)
-	  trackingPlot.clear()
-	  // trackingPlot.plotPointsNormalize(fused1, {ymax: 10, ymin: -10, color: "222"})
-	  trackingPlot.plotPointsNormalize(fused1, {ymax: 20, ymin: -20, color: "222"})
-	  // trackingPlot.plotPointsNormalize(fused2, {ymax: 10, ymin: -10, color: "0F0"})
-	  // trackingPlot.plotPointsNormalize(fused3, {ymax: 10, ymin: -10, color: "00F"})
+	function nextKinematic() {
+	  kitePS.newTrackingData(kinematic[kinematicIndex])
+	  console.log(kinematic[kinematicIndex].t);
+	  if (kinematicIndex < kinematic.length -2 ) { // < 5 ) {
+	    setTimeout(nextKinematic, (kinematic[kinematicIndex+1].time - kinematic[kinematicIndex].time)*1000)
+	    kinematicIndex += 1
+	  }
 	}
 
+	function nextControl() {
+	  kitePS.newMotorPosition(control[controlIndex])
+	  if (controlIndex < 5) { //control.length-2) {
+	    setTimeout(nextControl, (control[controlIndex+1].t - control[controlIndex].t)*1000)
+	    controlIndex += 1
+	  }
+	}
 
-	var sessionList = document.getElementById("sessionList")
-	sessionList.appendChild(plotSlider)
+	function simulate(session) {
+	  kinematic = session.kinematic
+	  control = session.control
 
+	  kitePS.stop()
+	  trackingPlot.clear()
+
+
+
+	  var kOffset = kinematic[kinematicIndex].time
+	  var cOffset = -kinematic[0].t
+
+	  kinematic = kinematic.map(function(e) {
+	    e.time -= kOffset
+	    e.pos.y = (1-e.pos.y)*3/4
+	    return e
+	  })
+	  control = control.map(function(e) {
+	    e.t -= cOffset
+	    return e
+	  })
+	  //
+	  setTimeout(function() {
+	    nextKinematic()
+	  }, kinematic[0].time)
+
+	  // setTimeout(function() {
+	  //   nextControl()
+	  // }, control[0].t)
+
+
+	  kitePS.start()
+
+	}
 
 	sessionList.onclick = function(e) {
 	  var index = Array.prototype.indexOf.call(e.target.parentNode.children, e.target)
@@ -288,7 +304,11 @@
 	  request("/sessions/" + index)
 	  .then( function(result) {
 	    livePlotData = result
-	    updateLivePlot()
+	    simulate(result)
+
+	    // updateLivePlot()
+
+
 	    })
 	  .catch( function(err) {
 	    console.error(err, "ouch")
@@ -3690,7 +3710,7 @@
 
 	  plotLine: function(line, options) {
 	    // draw the kite
-	    var ops = options || {} 
+	    var ops = options || {}
 	    this.context.strokeStyle = ops.color || "#000000"
 
 	    this.context.lineWidth=1;
@@ -3707,7 +3727,7 @@
 
 	    this.context.fillStyle = "red";
 	    this.context.save(); // save the unrotated context of the canvas so we can restore it later
-	    this.context.translate(x*this.canvas.width, y*this.canvas.height); // move to the point of the kite
+	    this.context.translate(x*this.canvas.width, y*this.canvas.width); // move to the point of the kite
 	    this.context.rotate(dir); // rotate the canvas to the specified degrees
 
 	    // draw the kite
@@ -3758,12 +3778,10 @@
 	module.exports = WebSocketController
 
 	function WebSocketController() {
-	  // this.controlAmplitude = 200 // +- 300 mm from
-	  // this.controlOffSet = 0
-	  // this.controlInput = 0
 	  this.lastMove = 0 // timer
-	  this.buffer = new Int16Array(1)
 	  this.ai = false
+	  this.logging = false
+	  this.motor = false
 	}
 
 	WebSocketController.prototype = {
@@ -3799,15 +3817,14 @@
 	  newControlSliderValue: function(val) {
 	    // do nothing if last move was less than 25 ms ago
 	    if(Date.now() - this.lastMove > 25 && !this.ai) {
-	      // controlInput = (val/500-1) * 400 / 20 * controlAmplitude
-	      this.buffer[0] = val // + controlOffSet
-	      this.ws.send( this.buffer )
+	      var buffer = new Int16Array(1)
+	      buffer[0] = val
+	      this.ws.send( buffer )
 	      this.lastMove = Date.now()
 	    }
 	  },
 
 	  zero: function() {
-	    //controlOffSet += controlInput
 	    this.ws.send('motor,zero') // zero in the WebSocketServer
 	    document.getElementById("sliderControl").value = 500
 	  },
@@ -3818,13 +3835,12 @@
 	    var command = input[0]
 	    var value = input[1]
 	    switch (command) {
-	      case 'state':
-	        console.log(data)
+	      case 'logging':
 	        switch (value) {
-	          case 'start':
+	          case 'on':
 	            document.getElementById("loggingBox").checked = true
 	            break;
-	          case 'stop':
+	          case 'off':
 	            document.getElementById("loggingBox").checked = false
 	            break;
 	          default:
@@ -3839,12 +3855,6 @@
 	          case 'off':
 	            document.getElementById("motorPowerBox").checked = false
 	            break;
-	          // case 'online':
-	          //   document.getElementById("motorConnected").checked = true
-	          //   break;
-	          // case 'offline':
-	          //   document.getElementById("motorConnected").checked = false
-	          //   break;
 	          default:
 
 	        }
@@ -3906,6 +3916,36 @@
 	  toggleAI: function() {
 	    this.ai = !this.ai
 	    this.ai ? this.ws.send('ai,on') : this.ws.send('ai,off')
+	  },
+
+	  motorOn: function() {
+	    this.motor = false
+	    this.ws.send('motor,on')
+	  },
+
+	  motorOff: function() {
+	    this.motor = false
+	    this.ws.send('motor,off')
+	  },
+
+	  toggleMotor: function() {
+	    this.motor = !this.motor
+	    this.motor ? this.ws.send('motor,on') : this.ws.send('motor,off')
+	  },
+
+	  loggingOn: function() {
+	    this.logging = false
+	    this.ws.send('logging,on')
+	  },
+
+	  loggingOff: function() {
+	    this.logging = false
+	    this.ws.send('logging,off')
+	  },
+
+	  toggleLogging: function() {
+	    this.logging = !this.logging
+	    this.logging ? this.ws.send('logging,on') : this.ws.send('logging,off')
 	  }
 	}
 
@@ -4136,6 +4176,181 @@
 
 
 
+	}
+
+
+/***/ },
+/* 14 */,
+/* 15 */
+/***/ function(module, exports) {
+
+	// export
+	module.exports = KitePS
+
+	function KitePS(controller, plotter, newPos) {
+	  this.plotter = plotter // optional
+	  this.controller = controller
+	  this.newPos = newPos // optional
+	  this.updateInterval = 0.01 //s
+	  this.lbd = 0.03 // look back distance
+	  this.lbdMax = 0.05 // velocity and direction
+	  this.minDt = 0.03
+	  this.resetCount = 0
+	}
+
+	KitePS.prototype = {
+
+	  setup : function() {
+	    var x = 0.5
+	    var y = 0.5 // 3/4 is max
+	    var dir = -Math.PI/2
+	    this.kite = new KiteComponent(x, y, dir, this.controller)
+	    this.kite.velocity = 0 // hmm
+	    this.lastTime = 0
+	    this.internalTimer = 0
+	    this.timeOffset = 0
+	    this.track = []
+	    this.draw()
+	  },
+
+	  start : function() {
+	    this.interval = setInterval(this.loop.bind(this), this.updateInterval*1000)
+	  },
+
+	  stop : function() {
+	    clearInterval(this.interval)
+	  },
+
+	  pause : function(time) {
+	    return new Promise( function(resolve, reject) {
+	      setTimeout( function() {
+	        resolve()
+	      }, time)
+	    })
+	  },
+
+	  loop : function() {
+	    var timestamp = Date.now() / 1000
+	    this.update(timestamp)
+	    if (this.plotter) { this.draw() }
+	    this.internalTimer = timestamp
+	  },
+
+	  update : function(timestamp) { // seconds
+	    // update estimated position
+	    var dt = timestamp - this.lastTime
+
+	    this.kite.updateExpectedPosition(dt) // kite and motor
+
+	    var targePos = this.kite.updateMotorPosition()
+	    if (this.newPos) { this.newPos(targePos) }
+	    // add point to track
+	    this.track.push([this.kite.x, this.kite.y, timestamp])
+	    this.lastTime = timestamp
+	  },
+
+	  draw : function() {
+	    this.plotter.clear()
+	    this.plotter.plotKite(this.kite.x, this.kite.y, this.kite.direction)
+	  },
+
+	  newTrackingData: function(kinematic) {
+
+	    var index = this.track.length-1
+	    if (index < 0) { return }
+	    var kPos = [kinematic.pos.x, kinematic.pos.y, Date.now() / 1000]
+
+	    var l = this.distance(kPos, this.track[index])
+	    var dt = this.deltaT(kPos, this.track[index])
+
+	    while (l < this.lbd || dt < this.minDt) {
+	      index -= 1
+	      if (index < 0) { return }
+	      l = this.distance(kPos, this.track[index])
+	      dt = this.deltaT(kPos, this.track[index])
+	    }
+
+
+	    var omega = this.angleToPoint(kPos, this.track[index])
+	    var vel = l / dt
+
+	    if (!this.controller.hasTrack()) {
+	      // update omegadot
+	    }
+
+	    this.kite.x = kPos[0]
+	    this.kite.y = kPos[1]
+	    this.lastTime = kPos[2]
+
+	    if (l < this.lbdMax) {
+	      this.kite.direction = omega
+	      this.kite.velocity = vel
+	    }
+	  },
+
+	  newMotorPosition: function(pos) {
+	    this.kite.motor.targetPos = pos
+	  },
+
+	  angleToPoint(pTo, pFrom) {
+	    var dx = pTo[0] - pFrom[0]
+	    var dy = pTo[1] - pFrom[1]
+	    return Math.atan2(dy, dx)
+	  },
+
+	  distance: function(p1, p2) {
+	    var dx = p1[0] - p2[0]
+	    var dy = p1[1] - p2[1]
+	    return Math.sqrt(dx*dx + dy*dy)
+	  },
+
+	  deltaT: function(p1, p2) {
+	    return p1[2] - p2[2]
+	  }
+
+	}
+
+	function Motor() {
+	  this.pos = 0 // value from 1000 to 0
+	  this.speed = 4000 // pos per second // missing acceleration
+	  this.omegaDot = 0
+	  this.targetPos = 0
+
+	  this.update = function(dt) {
+	    if (this.targetPos != this.pos) {
+	      this.pos += Math.sign( this.targetPos - this.pos) * Math.min(this.speed*dt, Math.abs(this.targetPos - this.pos));
+	      this.omegaDot = this.pos * 0.00314; // change up for 5 degrees per increment
+	    }
+	  }
+	}
+
+	function KiteComponent(x, y, dir, controller) {
+	  this.x = x
+	  this.y = y
+	  this.direction = dir
+	  this.velocity = 0 // units per second
+	  this.controller = controller
+
+	  this.motor = new Motor()
+
+	  this.updateMotorPosition = function(dt) {
+	    if (this.controller.hasTrack()) {
+	      var targetPos = this.controller.motorPos(this.x, this.y, this.direction, this.velocity)
+	      this.motor.targetPos = targetPos
+	      return targetPos
+	    }
+	  }
+
+	  this.updateExpectedPosition = function(dt) {
+	    this.direction += this.motor.omegaDot*dt;
+	    this.x += Math.cos(this.direction) * this.velocity * dt;
+	    this.y += Math.sin(this.direction) * this.velocity * dt;
+	    this.motor.update(dt)
+	  }
+
+	  this.outOfBounds = function() {
+	    return (this.x < 0 || this.x > 1 || this.y < 0 || this.y > 3/4)
+	  }
 	}
 
 

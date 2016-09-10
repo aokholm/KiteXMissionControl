@@ -1,12 +1,25 @@
 var WebSocketServer = require('ws').Server
 var jsonfile = require('jsonfile')
-var ai = require('./ai.js')
+// var ai = require('./ai.js')
 var KiteControl = require('./kiteControl.js')
+var MotorControl = require('./motorControl.js')
+var KitePS = require('./kitePS.js')
 
-var kiteControl = new KiteControl(ai.network)
+var motorControl = new MotorControl()
+
+window.kitePS = new KitePS(motorControl, null, function(p) {
+  if (ai) controlMotor(p, false)
+
+  if (DEVICES.WEBCONTROL in wss) { // and feed back data to webcontrol for interface update.
+    if (ai) wss[DEVICES.WEBCONTROL].send("aiControlValue," + p , {masked: true})
+    // wss[DEVICES.WEBCONTROL].send("dir," + this.direction , {masked: true})
+    // wss[DEVICES.WEBCONTROL].send("dirCount," + this.directionCount , {masked: true})
+  }
+})
+
 
 var wsServer = new WebSocketServer({ port: 8080 })
-
+var ai = false
 var logging = false
 var kinematicLog = []
 var controlLog = []
@@ -58,38 +71,46 @@ function processBinary(ws, data) {
         kinematicLog.push(kinematic)
       }
 
-      kiteControl.update(kinematic)
+      kiteControl.newTrackingData(kinematic)
 
       break
     case DEVICES.CONTROL:
       var raw = new Int16Array(new Uint8Array(data).buffer)
       var newPosition = raw[0]
-      controlMotor(newPosition)
+      controlMotor(newPosition, false)
       break
     case DEVICES.WEBCONTROL:
-      var raw = new Int16Array(new Uint8Array(data).buffer)
-      var newPosition = raw[0]
-      controlMotor(newPosition/1000)
+      if (data.length == 2) {
+        var raw = new Int16Array(new Uint8Array(data).buffer)
+        var newPosition = raw[0]
+        controlMotor(newPosition/1000, true)
+      }
+      else { // new path format float32, x0, y0
+        var raw = new Float32Array(new Uint8Array(data).buffer)
+
+        var track = []
+        for (var i = 0; i < raw.length; i+=2) {
+          track.push([raw[i], raw[i+1]])
+        }
+
+        var filepath = __dirname + '/../tracks/' + new Date().toISOString() + '-track.json'
+
+        jsonfile.writeFile(filepath, track, err => {
+          if (err) { console.error(err) }
+        })
+
+        kitePS.stop()
+
+        motorControl.loadTrack(track)
+        motorControl.reset()
+
+        kitePS.setup()
+        simulation.start()
+
+      }
+
       break
     default:
-  }
-}
-
-function controlMotor(val) {
-  // var raw = new Int16Array(new Uint8Array(data).buffer)
-  // var newPosition = raw[0]
-  motorRelativePos = (val*2-1) * motorAmplitude * 400 / 40
-  motorAbsPos = motorRelativePos + motorOffset // 400 steps pr 40 mm
-
-  var data = new Int16Array(1)
-  data[0] = motorAbsPos
-  if (DEVICES.MOTOR in wss) {
-    // console.log(cam.time)
-    wss[DEVICES.MOTOR].send(data, {binary: true, masked: true})
-  }
-
-  if (logging) {
-    controlLog.push({'t': (new Date() - startTime)/1000, 'p': motorRelativePos})
   }
 }
 
@@ -107,21 +128,22 @@ function processText(ws, data) {
         }
       }
       break
-    case 'state':
-      // let every client know about the state change
-      wsServer.broadcast(data)
-
+    case 'logging':
       // create new session everytime state changes from stop to start
       switch (value) {
-        case 'start':
+        case 'on':
             startSession()
           break
-        case 'stop':
+        case 'off':
             logging = false
             saveSession()
           break
         default:
       }
+      if (DEVICES.WEBCONTROL in wss) { // and feed back data to webcontrol for interface update.
+        wss[DEVICES.WEBCONTROL].send(data, {masked: true})
+      }
+
       break
     case 'motor':
       if (value === "zero") {
@@ -157,20 +179,20 @@ function processText(ws, data) {
     case 'ai':
       switch (value) {
         case 'on':
-          kiteControl.autonomous = true
+          ai = true
           break
         case 'off':
-          kiteControl.autonomous = false
+          ai = false
           break
         case 'resetRotation':
-          kiteControl.resetRotation()
+          // kiteControl.resetRotation()
           break
         case 'dirDecrement':
           console.log("!");
-          kiteControl.directionCount -= 1
+          // kiteControl.directionCount -= 1
           break
         case 'dirIncrement':
-          kiteControl.directionCount += 1
+          // kiteControl.directionCount += 1
           break
         default:
       }
@@ -188,12 +210,31 @@ function processText(ws, data) {
 }
 
 
+function controlMotor(val, normalized) {
+  // var raw = new Int16Array(new Uint8Array(data).buffer)
+  // var newPosition = raw[0]
+  motorRelativePos = normalized ? (val*2-1) * motorAmplitude * 400 / 40 : val
+  motorAbsPos = motorRelativePos + motorOffset // 400 steps pr 40 mm
+
+  var data = new Int16Array(1)
+  data[0] = motorAbsPos
+  if (DEVICES.MOTOR in wss) {
+    // console.log(cam.time)
+    wss[DEVICES.MOTOR].send(data, {binary: true, masked: true})
+  }
+
+  if (logging) {
+    controlLog.push({'t': (new Date() - startTime)/1000, 'p': motorRelativePos})
+  }
+}
+
+
 function saveSession() {
   var file = __dirname + '/../sessions/' + sessionName + '.json'
   var obj = {kinematic: kinematicLog, control: controlLog}
 
   jsonfile.writeFile(file, obj, err => {
-    console.error(err)
+    if (err) { console.error(err) }
   })
 
 }
@@ -204,17 +245,6 @@ function startSession() {
   kinematicLog = []
   controlLog = []
   logging = true
-}
-
-kiteControl.onUpdate = function(kinematic) {
-  var controlValue = this.network.activate([kinematic.pos.x, kinematic.pos.y, kinematic.pos.dir])[0]
-  if (this.autonomous) controlMotor(controlValue)
-
-  if (DEVICES.WEBCONTROL in wss) { // and feed back data to webcontrol for interface update.
-    if (this.autonomous) wss[DEVICES.WEBCONTROL].send("aiControlValue," + controlValue , {masked: true})
-    wss[DEVICES.WEBCONTROL].send("dir," + this.direction , {masked: true})
-    wss[DEVICES.WEBCONTROL].send("dirCount," + this.directionCount , {masked: true})
-  }
 }
 
 // TESTING
