@@ -5,9 +5,15 @@ function WebSocketController() {
   this.ai = false
   this.logging = false
   this.motor = false
+  this.startTime = 0
 }
 
 WebSocketController.prototype = {
+
+  speedTest: function() {
+    this.startTime = Date.now()
+    this.ws.send('S,0')
+  },
 
   connect: function() {
     // Let us open a web socket
@@ -120,7 +126,15 @@ WebSocketController.prototype = {
         console.log(value);
         document.getElementById("sliderControl").value = parseFloat(value)*1000
         break
-
+      case 'S':
+        var val = parseFloat(value)
+        if (val < 10000) {
+          this.ws.send('S,' + (val+1))
+        } else {
+          console.log("completed");
+          console.log((Date.now() - this.startTime)/10000);
+        }
+        break
       default:
         console.log(data)
     }

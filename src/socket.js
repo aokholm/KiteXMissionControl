@@ -7,7 +7,7 @@ var KitePS = require('./kitePS.js')
 
 var motorControl = new MotorControl()
 
-window.kitePS = new KitePS(motorControl, null, function(p) {
+var kitePS = new KitePS(motorControl, null, function(p) {
   if (ai) controlMotor(p, false)
 
   if (DEVICES.WEBCONTROL in wss) { // and feed back data to webcontrol for interface update.
@@ -71,7 +71,7 @@ function processBinary(ws, data) {
         kinematicLog.push(kinematic)
       }
 
-      kiteControl.newTrackingData(kinematic)
+      kitePS.newTrackingData(kinematic)
 
       break
     case DEVICES.CONTROL:
@@ -105,7 +105,7 @@ function processBinary(ws, data) {
         motorControl.reset()
 
         kitePS.setup()
-        simulation.start()
+        kitePS.start()
 
       }
 
@@ -202,6 +202,9 @@ function processText(ws, data) {
       break
     case 'motorAmplitude':
       motorAmplitude = parseFloat(value)
+      break
+    case 'S':
+      wss[DEVICES.WEBCONTROL].send(data)
       break
     default:
 

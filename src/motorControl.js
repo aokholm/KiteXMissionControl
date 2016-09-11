@@ -12,7 +12,7 @@ MotorController.prototype = {
 
   reset: function() {
     this.currentPoint = 0
-  }
+  },
 
   hasTrack: function() {
     return (this.track != undefined && this.track.length > 0)

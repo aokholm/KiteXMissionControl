@@ -10,6 +10,7 @@ function KitePS(controller, plotter, newPos) {
   this.lbdMax = 0.05 // velocity and direction
   this.minDt = 0.03
   this.resetCount = 0
+  this.setup()
 }
 
 KitePS.prototype = {
@@ -24,10 +25,11 @@ KitePS.prototype = {
     this.internalTimer = 0
     this.timeOffset = 0
     this.track = []
-    this.draw()
+    if (this.plotter) { this.draw() }
   },
 
   start : function() {
+    console.log("Start KitePS");
     this.interval = setInterval(this.loop.bind(this), this.updateInterval*1000)
   },
 
@@ -57,7 +59,9 @@ KitePS.prototype = {
     this.kite.updateExpectedPosition(dt) // kite and motor
 
     var targePos = this.kite.updateMotorPosition()
-    if (this.newPos) { this.newPos(targePos) }
+    if (this.newPos) {
+      this.newPos(targePos)
+    }
     // add point to track
     this.track.push([this.kite.x, this.kite.y, timestamp])
     this.lastTime = timestamp
@@ -126,7 +130,7 @@ KitePS.prototype = {
 
 function Motor() {
   this.pos = 0 // value from 1000 to 0
-  this.speed = 4000 // pos per second // missing acceleration
+  this.speed = 8000 // pos per second // missing acceleration
   this.omegaDot = 0
   this.targetPos = 0
 

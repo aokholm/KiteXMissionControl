@@ -30,6 +30,7 @@ window.startSimulation = function() {
   motorController.loadTrack(points.reverse().map(function(e) {
     return [e[0]/400, e[1]/400]
   }))
+  kitePS.setup()
   kitePS.start()
 }
 

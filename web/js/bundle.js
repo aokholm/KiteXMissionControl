@@ -50,7 +50,7 @@
 	var WebSocketController = __webpack_require__(11)
 	var Simulation = __webpack_require__(12)
 	var fuse = __webpack_require__(13)
-	var MotorController = __webpack_require__(!(function webpackMissingModule() { var e = new Error("Cannot find module \"../motorControl\""); e.code = 'MODULE_NOT_FOUND'; throw e; }()))
+	var MotorController = __webpack_require__(14)
 	var KitePS = __webpack_require__(15)
 
 
@@ -76,6 +76,7 @@
 	  motorController.loadTrack(points.reverse().map(function(e) {
 	    return [e[0]/400, e[1]/400]
 	  }))
+	  kitePS.setup()
 	  kitePS.start()
 	}
 
@@ -3782,9 +3783,15 @@
 	  this.ai = false
 	  this.logging = false
 	  this.motor = false
+	  this.startTime = 0
 	}
 
 	WebSocketController.prototype = {
+
+	  speedTest: function() {
+	    this.startTime = Date.now()
+	    this.ws.send('S,0')
+	  },
 
 	  connect: function() {
 	    // Let us open a web socket
@@ -3897,7 +3904,15 @@
 	        console.log(value);
 	        document.getElementById("sliderControl").value = parseFloat(value)*1000
 	        break
-
+	      case 'S':
+	        var val = parseFloat(value)
+	        if (val < 10000) {
+	          this.ws.send('S,' + (val+1))
+	        } else {
+	          console.log("completed");
+	          console.log((Date.now() - this.startTime)/10000);
+	        }
+	        break
 	      default:
 	        console.log(data)
 	    }
@@ -4180,7 +4195,85 @@
 
 
 /***/ },
-/* 14 */,
+/* 14 */
+/***/ function(module, exports) {
+
+	module.exports = MotorController
+
+	function MotorController() {
+	  this.currentPoint = 0
+	  this.lad = 0.15 // look ahead distance
+	}
+
+	MotorController.prototype = {
+	  loadTrack: function(track) {
+	    this.track = track
+	  },
+
+	  reset: function() {
+	    this.currentPoint = 0
+	  },
+
+	  hasTrack: function() {
+	    return (this.track != undefined && this.track.length > 0)
+	  },
+
+	  motorPos: function(x, y, direction, velocity) {
+	    return this.update([x, y], direction)
+	  },
+
+	  update: function(kPos, omega) {
+	    // iterate until a point is outside Look ahead distance
+	    var l = this.distance(this.point(), kPos)
+
+	    while (l < this.lad) {
+	      this.next()
+	      l = this.distance(this.point(), kPos)
+	    }
+
+	    omega = (omega + 100*Math.PI) % (2*Math.PI) // works for up to 50 negative rotations
+
+	    var theta_e = (this.angleToPoint(this.point(), kPos) - omega) % (2*Math.PI)// should concider warp arround
+
+	    if (theta_e < -Math.PI) {
+	      theta_e += 2*Math.PI
+	    }
+	    if (theta_e > Math.PI) {
+	      theta_e -= 2*Math.PI
+	    }
+	    var gamma = 2*theta_e / l
+
+	    return gamma*150 // formula derived from observations
+	  },
+
+	  angleToPoint(pTo, pFrom) {
+	    var dx = pTo[0] - pFrom[0]
+	    var dy = pTo[1] - pFrom[1]
+	    return Math.atan2(dy, dx)
+	  },
+
+	  distance: function(p1, p2) {
+	    var dx = p1[0] - p2[0]
+	    var dy = p1[1] - p2[1]
+	    return Math.sqrt(dx*dx + dy*dy)
+	  },
+
+	  point: function() {
+	    return this.track[this.currentPoint]
+	  },
+
+	  next: function() {
+	    this.currentPoint += 1
+	    if (this.currentPoint == this.track.length) {
+	      this.currentPoint = 0
+	    }
+	    return this.track[this.currentPoint]
+	  }
+
+	}
+
+
+/***/ },
 /* 15 */
 /***/ function(module, exports) {
 
@@ -4196,6 +4289,7 @@
 	  this.lbdMax = 0.05 // velocity and direction
 	  this.minDt = 0.03
 	  this.resetCount = 0
+	  this.setup()
 	}
 
 	KitePS.prototype = {
@@ -4210,10 +4304,11 @@
 	    this.internalTimer = 0
 	    this.timeOffset = 0
 	    this.track = []
-	    this.draw()
+	    if (this.plotter) { this.draw() }
 	  },
 
 	  start : function() {
+	    console.log("Start KitePS");
 	    this.interval = setInterval(this.loop.bind(this), this.updateInterval*1000)
 	  },
 
@@ -4243,7 +4338,9 @@
 	    this.kite.updateExpectedPosition(dt) // kite and motor
 
 	    var targePos = this.kite.updateMotorPosition()
-	    if (this.newPos) { this.newPos(targePos) }
+	    if (this.newPos) {
+	      this.newPos(targePos)
+	    }
 	    // add point to track
 	    this.track.push([this.kite.x, this.kite.y, timestamp])
 	    this.lastTime = timestamp
@@ -4312,7 +4409,7 @@
 
 	function Motor() {
 	  this.pos = 0 // value from 1000 to 0
-	  this.speed = 4000 // pos per second // missing acceleration
+	  this.speed = 8000 // pos per second // missing acceleration
 	  this.omegaDot = 0
 	  this.targetPos = 0
 
