@@ -10,11 +10,6 @@ function WebSocketController() {
 
 WebSocketController.prototype = {
 
-  speedTest: function() {
-    this.startTime = Date.now()
-    this.ws.send('S,0')
-  },
-
   connect: function() {
     // Let us open a web socket
     var self = this

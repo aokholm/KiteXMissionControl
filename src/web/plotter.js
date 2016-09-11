@@ -1,5 +1,8 @@
 module.exports = Plotter
 
+var util = require('./util.js')
+var merge = util.merge
+var button = util.button
 
 function Plotter(id, width, height) {
   this.canvas = document.createElement("canvas")
@@ -8,6 +11,13 @@ function Plotter(id, width, height) {
   this.context = this.canvas.getContext("2d")
   this.container = document.getElementById(id)
   this.container.appendChild(this.canvas)
+  var self = this
+  var btClear = button("clear", function() {
+    self.clear()
+  })
+
+  this.container.appendChild(btClear)
+
 }
 
 Plotter.prototype = {
@@ -43,7 +53,7 @@ Plotter.prototype = {
   },
 
   plotPoints: function(points, options) {
-
+    var options = options || {}
     this.context.fillStyle = options.color || "#000000"
     for (p of points) {
       this.context.fillRect(p[0]-2, p[1]-2, 4, 4)
@@ -87,28 +97,4 @@ Plotter.prototype = {
   clear : function() {
     this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
   },
-}
-
-function merge() {
-    var obj, name, copy,
-        target = arguments[0] || {},
-        i = 1,
-        length = arguments.length;
-
-    for (; i < length; i++) {
-        if ((obj = arguments[i]) != null) {
-            for (name in obj) {
-                copy = obj[name];
-
-                if (target === copy) {
-                    continue;
-                }
-                else if (copy !== undefined) {
-                    target[name] = copy;
-                }
-            }
-        }
-    }
-
-    return target;
 }

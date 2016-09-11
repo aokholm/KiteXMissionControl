@@ -1,35 +1,39 @@
 // export
-module.exports = KitePS
+module.exports = KitePositionSystem
 
-function KitePS(controller, plotter, newPos) {
-  this.plotter = plotter // optional
-  this.controller = controller
-  this.newPos = newPos // optional
+function KitePositionSystem() {
   this.updateInterval = 0.01 //s
   this.lbd = 0.03 // look back distance
-  this.lbdMax = 0.05 // velocity and direction
+  this.lbdMax = 0.1 // velocity and direction
   this.minDt = 0.03
   this.resetCount = 0
+  this.trackExtrapolationBufferSize = 500
+  this.trackBufferSize = 500
   this.setup()
+  this.start()
 }
 
-KitePS.prototype = {
+KitePositionSystem.prototype = {
+
+  onKinematic: function(cb) {
+    this.onKinematic = cb
+  },
 
   setup : function() {
     var x = 0.5
     var y = 0.5 // 3/4 is max
     var dir = -Math.PI/2
-    this.kite = new KiteComponent(x, y, dir, this.controller)
+    this.kite = new KiteSimulator(x, y, dir)
+    this.motor = new MotorSimulator()
     this.kite.velocity = 0 // hmm
     this.lastTime = 0
-    this.internalTimer = 0
     this.timeOffset = 0
+    this.trackExtrapolation = []
     this.track = []
-    if (this.plotter) { this.draw() }
   },
 
   start : function() {
-    console.log("Start KitePS");
+    console.log("Start KitePositionSystem");
     this.interval = setInterval(this.loop.bind(this), this.updateInterval*1000)
   },
 
@@ -37,46 +41,38 @@ KitePS.prototype = {
     clearInterval(this.interval)
   },
 
-  pause : function(time) {
-    return new Promise( function(resolve, reject) {
-      setTimeout( function() {
-        resolve()
-      }, time)
-    })
-  },
-
   loop : function() {
     var timestamp = Date.now() / 1000
     this.update(timestamp)
-    if (this.plotter) { this.draw() }
-    this.internalTimer = timestamp
   },
 
   update : function(timestamp) { // seconds
     // update estimated position
     var dt = timestamp - this.lastTime
 
-    this.kite.updateExpectedPosition(dt) // kite and motor
+    this.kite.updateExpectedPosition(this.motor.omegaDot, dt) // kite and motor
+    this.motor.updateExpectedPosition(dt)
 
-    var targePos = this.kite.updateMotorPosition()
-    if (this.newPos) {
-      this.newPos(targePos)
-    }
-    // add point to track
-    this.track.push([this.kite.x, this.kite.y, timestamp])
+    // add point to trackExtrapolation
+    this.trackExtrapolation.push([this.kite.x, this.kite.y, timestamp])
     this.lastTime = timestamp
-  },
 
-  draw : function() {
-    this.plotter.clear()
-    this.plotter.plotKite(this.kite.x, this.kite.y, this.kite.direction)
+    if (this.onKinematic) {
+      this.onKinematic(this.kite.kinematic())
+    }
+
+    if (this.trackExtrapolation.length == this.trackExtrapolationBufferSize) {
+      this.trackExtrapolation.shift()
+    }
+
   },
 
   newTrackingData: function(kinematic) {
-
-    var index = this.track.length-1
-    if (index < 0) { return }
     var kPos = [kinematic.pos.x, kinematic.pos.y, Date.now() / 1000]
+    this.track.push(kPos)
+
+    var index = this.track.length-2
+    if (index < 0) { return }
 
     var l = this.distance(kPos, this.track[index])
     var dt = this.deltaT(kPos, this.track[index])
@@ -88,13 +84,8 @@ KitePS.prototype = {
       dt = this.deltaT(kPos, this.track[index])
     }
 
-
     var omega = this.angleToPoint(kPos, this.track[index])
     var vel = l / dt
-
-    if (!this.controller.hasTrack()) {
-      // update omegadot
-    }
 
     this.kite.x = kPos[0]
     this.kite.y = kPos[1]
@@ -104,10 +95,14 @@ KitePS.prototype = {
       this.kite.direction = omega
       this.kite.velocity = vel
     }
+
+    if (this.track.length == this.trackBufferSize) {
+      this.track.shift()
+    }
   },
 
-  newMotorPosition: function(pos) {
-    this.kite.motor.targetPos = pos
+  motorMoveTo: function(pos) {
+    this.motor.moveTo(pos)
   },
 
   angleToPoint(pTo, pFrom) {
@@ -124,17 +119,36 @@ KitePS.prototype = {
 
   deltaT: function(p1, p2) {
     return p1[2] - p2[2]
+  },
+
+  setVelocity: function(vel) {
+    this.kite.velocity = vel
   }
 
 }
 
-function Motor() {
+KitePositionSystem.kinematicRaw2Dict = function(r) {
+  // raw is a 64bit typed array
+  return {
+    time: r[0],
+    pos: {
+      x: r[1],
+      y: ((1-r[2]) * 3/4), // TODO: normalize in iOS app?
+    }
+  }
+}
+
+function MotorSimulator() {
   this.pos = 0 // value from 1000 to 0
   this.speed = 8000 // pos per second // missing acceleration
   this.omegaDot = 0
   this.targetPos = 0
 
-  this.update = function(dt) {
+  this.moveTo = function(targetPos) {
+    this.targetPos = targetPos
+  }
+
+  this.updateExpectedPosition = function(dt) {
     if (this.targetPos != this.pos) {
       this.pos += Math.sign( this.targetPos - this.pos) * Math.min(this.speed*dt, Math.abs(this.targetPos - this.pos));
       this.omegaDot = this.pos * 0.00314; // change up for 5 degrees per increment
@@ -142,31 +156,23 @@ function Motor() {
   }
 }
 
-function KiteComponent(x, y, dir, controller) {
+function KiteSimulator(x, y, dir) {
   this.x = x
   this.y = y
   this.direction = dir
   this.velocity = 0 // units per second
-  this.controller = controller
 
-  this.motor = new Motor()
-
-  this.updateMotorPosition = function(dt) {
-    if (this.controller.hasTrack()) {
-      var targetPos = this.controller.motorPos(this.x, this.y, this.direction, this.velocity)
-      this.motor.targetPos = targetPos
-      return targetPos
-    }
-  }
-
-  this.updateExpectedPosition = function(dt) {
-    this.direction += this.motor.omegaDot*dt;
+  this.updateExpectedPosition = function(omegaDot, dt) {
+    this.direction += omegaDot*dt;
     this.x += Math.cos(this.direction) * this.velocity * dt;
     this.y += Math.sin(this.direction) * this.velocity * dt;
-    this.motor.update(dt)
   }
 
   this.outOfBounds = function() {
     return (this.x < 0 || this.x > 1 || this.y < 0 || this.y > 3/4)
+  }
+
+  this.kinematic = function() {
+    return [this.x, this.y, this.direction, this.velocity]
   }
 }

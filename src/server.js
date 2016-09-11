@@ -3,8 +3,10 @@
 const Hapi = require('hapi');
 const fs = require('fs')
 const Inert = require('inert');
+const jsonfile = require('jsonfile')
 
 const sessionsPath = "./sessions/"
+const trackPath = "./tracks/"
 
 // Create a server with a host and port
 const server = new Hapi.Server();
@@ -33,22 +35,10 @@ server.route({
     }
 });
 
-server.route({
-    method: 'GET',
-    path:'/sessions',
-    handler: function (request, reply) {
-        return reply(JSON.stringify(fs.readdirSync(sessionsPath)))
-    }
-});
+createGenericRestEndPoint('tracks', trackPath)
+createGenericRestEndPoint('sessions', sessionsPath)
 
-server.route({
-    method: 'GET',
-    path:'/sessions/{id}',
-    handler: function (request, reply) {
-        var filename = fs.readdirSync(sessionsPath)[encodeURIComponent(request.params.id)]
-        return reply(fs.readFileSync(sessionsPath + filename, 'utf8'))
-    }
-})
+
 
 // Start the server
 server.start((err) => {
@@ -58,3 +48,36 @@ server.start((err) => {
     }
     console.log('Server running at:', server.info.uri);
 })
+
+function createGenericRestEndPoint(baseName, basePath) {
+
+  server.route({
+      method: 'GET',
+      path:'/' + baseName,
+      handler: function (request, reply) {
+          return reply(JSON.stringify(fs.readdirSync(basePath)))
+      }
+  })
+
+  server.route({
+      method: 'GET',
+      path:'/' + baseName + '/{id}',
+      handler: function (request, reply) {
+          var fileName = fs.readdirSync(basePath)[encodeURIComponent(request.params.id)]
+          return reply(fs.readFileSync(basePath + fileName, 'utf8'))
+      }
+  })
+
+  server.route({
+      method: 'POST',
+      path:'/' + baseName,
+      handler: function (request, reply) {
+          var fileName = new Date().toISOString()
+          var file = basePath + fileName + '.json'
+          jsonfile.writeFile(file, request.payload, err => {
+            if (err) { console.error(err) }
+          })
+      }
+  })
+
+}

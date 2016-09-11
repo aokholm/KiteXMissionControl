@@ -1,11 +1,11 @@
-module.exports = MotorController
+module.exports = PurePursuitController
 
-function MotorController() {
+function PurePursuitController() {
   this.currentPoint = 0
   this.lad = 0.15 // look ahead distance
 }
 
-MotorController.prototype = {
+PurePursuitController.prototype = {
   loadTrack: function(track) {
     this.track = track
   },
