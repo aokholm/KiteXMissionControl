@@ -1,7 +1,8 @@
 module.exports = {
   post: post,
   button: button,
-  merge: merge
+  merge: merge,
+  slider: slider
 }
 
 function post(path, object) {
@@ -34,6 +35,19 @@ function button(text, action) {
 
 function slider(action) {
   var slider = document.createElement("input")
+  var options = {
+    type: "range",
+    min: 0,
+    max: 1000,
+    step: 1,
+    style: "width:400px"
+  }
+
+  for (var key in options) {
+    slider.setAttribute(key, options[key])
+  }
+  slider.addEventListener("input", function() { action(slider.value) })
+  return slider
 }
 
 function merge() {

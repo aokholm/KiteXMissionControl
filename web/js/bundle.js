@@ -300,7 +300,8 @@
 	module.exports = {
 	  post: post,
 	  button: button,
-	  merge: merge
+	  merge: merge,
+	  slider: slider
 	}
 
 	function post(path, object) {
@@ -333,6 +334,19 @@
 
 	function slider(action) {
 	  var slider = document.createElement("input")
+	  var options = {
+	    type: "range",
+	    min: 0,
+	    max: 1000,
+	    step: 1,
+	    style: "width:400px"
+	  }
+
+	  for (var key in options) {
+	    slider.setAttribute(key, options[key])
+	  }
+	  slider.addEventListener("input", function() { action(slider.value) })
+	  return slider
 	}
 
 	function merge() {
@@ -706,9 +720,11 @@
 
 /***/ },
 /* 7 */
-/***/ function(module, exports) {
+/***/ function(module, exports, __webpack_require__) {
 
 	module.exports = MotorController
+
+	slider = __webpack_require__(3).slider
 
 	function MotorController(id) {
 	  this.onMovingToRelative = function() {}
@@ -718,15 +734,19 @@
 	  this.motorAmplitude = 300 // 300 mm +-
 	  this.parrentElement = document.getElementById(id)
 
-	  this.slider = slider
+	  var self = this
+	  this.slider = slider(function(value) {
+	    self.moveToNormalized(value/1000)
+	  })
 
+	  this.parrentElement.appendChild(this.slider)
 	}
 
 	MotorController.prototype = {
 
 	  zero: function() {
 	    this.motorOffset += this.motorRelativePos
-	    document.getElementById("sliderControl").value = 500 //TODO create slider with the motor controller??
+	    this.slider.value = 500 //TODO create slider with the motor controller??
 	  },
 
 	  moveTo: function(relativePos) {
@@ -737,9 +757,8 @@
 	  },
 
 	  moveToNormalized: function(val) {
-	    this.newPosition( (val*2-1) * this.motorAmplitude * 400 / 40 )
+	    this.moveTo( (val*2-1) * this.motorAmplitude * 400 / 40 )
 	  }
-
 	}
 
 	MotorController.curvatureToPos = function(curvature) {

@@ -1,5 +1,7 @@
 module.exports = MotorController
 
+slider = require("./util.js").slider
+
 function MotorController(id) {
   this.onMovingToRelative = function() {}
   this.onMovingToAbsolute = function() {}
@@ -8,15 +10,19 @@ function MotorController(id) {
   this.motorAmplitude = 300 // 300 mm +-
   this.parrentElement = document.getElementById(id)
 
-  this.slider = slider
+  var self = this
+  this.slider = slider(function(value) {
+    self.moveToNormalized(value/1000)
+  })
 
+  this.parrentElement.appendChild(this.slider)
 }
 
 MotorController.prototype = {
 
   zero: function() {
     this.motorOffset += this.motorRelativePos
-    document.getElementById("sliderControl").value = 500 //TODO create slider with the motor controller??
+    this.slider.value = 500 //TODO create slider with the motor controller??
   },
 
   moveTo: function(relativePos) {
@@ -27,9 +33,8 @@ MotorController.prototype = {
   },
 
   moveToNormalized: function(val) {
-    this.newPosition( (val*2-1) * this.motorAmplitude * 400 / 40 )
+    this.moveTo( (val*2-1) * this.motorAmplitude * 400 / 40 )
   }
-
 }
 
 MotorController.curvatureToPos = function(curvature) {
