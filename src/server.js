@@ -29,9 +29,11 @@ server.route({
 
 server.route({
     method: 'GET',
-    path:'/js/bundle.js',
-    handler: function (request, reply) {
-      reply.file('./web/js/bundle.js');
+    path: '/js/{filename}',
+    handler: {
+        file: function (request) {
+            return "./web/js/" + request.params.filename;
+        }
     }
 });
 

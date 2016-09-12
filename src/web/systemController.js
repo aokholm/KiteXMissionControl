@@ -15,6 +15,7 @@ function SystemController() {
   this.webSocketController = new WebSocketController()
   this.purePursuitController = new PurePursuitController()
   this.trackingPlot = new Plotter("trackingPlot", 400, 300)
+  this.imagePlot = new Plotter("imagePlot", 640, 480)
   this.trackGenerator = new TrackGenerator("trackGenerator", this.trackingPlot)
   this.kitePositionSystem = new KitePositionSystem()
   this.motorController = new MotorController("motorController")
@@ -42,11 +43,15 @@ SystemController.prototype = {
 
     var self = this
 
-    this.webSocketController.onBinary = function(data) {
+    this.webSocketController.onBinaryKinematic = function(data) {
       var kinematic = KitePositionSystem.kinematicRaw2Dict(data)
       self.kitePositionSystem.newTrackingData(kinematic)
     }
 
+    this.webSocketController.onBinaryImage = function(data) {
+      var png = new PNG(new Uint8Array(data))
+      self.imagePlot.plotPNG90(png)
+    }
 
     this.kitePositionSystem.onKinematic = function(k) {
       self.purePursuitController.newKinematic(k)

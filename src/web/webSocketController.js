@@ -25,8 +25,11 @@ WebSocketController.prototype = {
 
     this.ws.onmessage = function (msg) {
       if(msg.data instanceof ArrayBuffer) {
-        var data = new Float64Array(msg.data)
-        if (self.onBinary) { self.onBinary(data) }
+        if (msg.data.byteLength === 24) {
+          if (self.onBinaryKinematic) { self.onBinaryKinematic(new Float64Array(msg.data)) }
+        } else {
+          if (self.onBinaryImage) { self.onBinaryImage(msg.data) }
+        }
       } else {
         self.processText(msg.data)
       }

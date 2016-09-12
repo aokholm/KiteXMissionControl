@@ -97,7 +97,7 @@ function processText(ws, data) {
 }
 
 // TESTING
-if (true) {
+if (false) {
   var theta = 0
   var offsetx = 0
   var offsety = 0

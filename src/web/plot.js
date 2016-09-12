@@ -104,9 +104,44 @@ Plot.prototype = {
 
   clear : function() {
     this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+  },
+
+  plotPNG90: function(png) {
+    var imgBuffer, imageData, width, height, widthIn, heightIn, k
+    width = this.canvas.width // output image
+    height = this.canvas.height
+    widthIn = height
+    heightIn = width
+
+    imgBuffer = png.decode()
+    imageData = this.context.createImageData(width, height)
+
+    // IN
+    // ____
+    // |  |
+    // |  |
+    // ____
+    //
+    // OUT
+    // ______
+    // |    |
+    // ______
+
+    var kIn = 0
+    for (var hi = 0; hi < heightIn; hi++) {
+      // first row, second row...
+      for (var wi = 0; wi < widthIn; wi++) {
+        // where is first row in new picture
+        var index = ( (height - wi -1) * width + hi) * 4
+        imageData.data[index] = imgBuffer[kIn++]
+        imageData.data[index+1] = imgBuffer[kIn++]
+        imageData.data[index+2] = imgBuffer[kIn++]
+        imageData.data[index+3] = imgBuffer[kIn++]
+      }
+    }
+
+    this.context.putImageData(imageData, 0, 0)
   }
-
-
 }
 
 
