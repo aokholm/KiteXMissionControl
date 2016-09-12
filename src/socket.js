@@ -105,7 +105,7 @@ if (true) {
   setInterval(function () {
     theta += 0.1
     var x = Math.sin(theta)*0.3 + offsetx + 0.5
-    var y = Math.cos(theta)*0.3 + offsety + 0.5
+    var y = Math.cos(theta)*0.3 + offsety + 0.4
     offsetx += (Math.random()-0.5)*2*0.00 - offsetx * 0.1
     offsety += (Math.random()-0.5)*2*0.00 - offsety * 0.1
 

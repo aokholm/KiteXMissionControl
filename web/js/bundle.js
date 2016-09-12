@@ -55,7 +55,7 @@
 
 	module.exports = SystemController
 
-	var Plotter = __webpack_require__(2)
+	var Plotter = __webpack_require__(2).Plotter
 	var WebSocketController = __webpack_require__(4)
 	var PurePursuitController = __webpack_require__(5)
 	var KitePositionSystem = __webpack_require__(6)
@@ -73,7 +73,7 @@
 	  this.kitePositionSystem = new KitePositionSystem()
 	  this.motorController = new MotorController("motorController")
 	  this.logger = new Logger()
-	  this.tracks = new Tracks("tracks")
+	  this.tracks = new Tracks("tracks", this.purePursuitController)
 
 	  this.state = {
 	    motor: false,
@@ -84,6 +84,9 @@
 	  this.setup()
 	  this.setupKeyEvents()
 	  this.setupUI()
+
+	  this.updateInterval = 0.02
+	  this.interval = setInterval(this.plot.bind(this), this.updateInterval*1000)
 	}
 
 
@@ -108,7 +111,10 @@
 	      if (self.state.ai) {
 	        self.motorController.moveTo(MotorController.curvatureToPos(curvature))
 	      }
+	    }
 
+	    this.purePursuitController.onTrack = function(track) {
+	      self.trackingPlot.plotLineNormalized(track)
 	    }
 
 	    this.motorController.onMovingToAbsolute = function(position) {
@@ -120,10 +126,8 @@
 	      self.logger.newControl(position)
 	    }
 
-	    var self = this
-	    window.loadTrack = function() {
-	      self.purePursuitController.loadTrack(self.trackGenerator.getTrack())
-	      self.purePursuitController.reset()
+	    this.trackGenerator.onChange = function() {
+	      self.tracks.load()
 	    }
 
 	    this.webSocketController.connect()
@@ -164,6 +168,19 @@
 	    this.ui.loggingBox = document.getElementById("loggingBox")
 	  },
 
+	  plot: function() {
+	    this.trackingPlot.clear()
+	    this.trackingPlot.plotLineNormalized(this.kitePositionSystem.trackExtrapolation, {color: "#666"})
+	    this.trackingPlot.plotPointsNormalized(this.kitePositionSystem.track, {color: "#66F"})
+	    if (this.purePursuitController.hasTrack()) {
+	      this.trackingPlot.plotLineNormalized(this.purePursuitController.track, {color: "#000"})
+	      this.trackingPlot.plotPointsNormalized([this.purePursuitController.point()], {color: "#F00"})
+	    }
+	    if (this.trackGenerator.hasTrack()) {
+	      this.trackingPlot.plotLine(this.trackGenerator.getTrackUnnormalized(), {color: "#F00"})
+	    }
+
+	  },
 
 	  toggleAI: function() {
 	    this.state.ai = !this.state.ai
@@ -193,31 +210,32 @@
 /* 2 */
 /***/ function(module, exports, __webpack_require__) {
 
-	module.exports = Plotter
+	module.exports = {
+	  Plotter: Plotter,
+	  Plot: Plot
+	}
 
 	var util = __webpack_require__(3)
 	var merge = util.merge
 	var button = util.button
 
 	function Plotter(id, width, height) {
+	  Plot.call(this, width, height)
+
+	  this.container = document.getElementById(id)
+	  this.container.appendChild(this.canvas)
+	}
+
+	function Plot(width, height) {
 	  this.canvas = document.createElement("canvas")
 	  this.canvas.width = width
 	  this.canvas.height = height
 	  this.context = this.canvas.getContext("2d")
-	  this.container = document.getElementById(id)
-	  this.container.appendChild(this.canvas)
-	  var self = this
-	  var btClear = button("clear", function() {
-	    self.clear()
-	  })
-
-	  this.container.appendChild(btClear)
-
 	}
 
-	Plotter.prototype = {
+	Plot.prototype = {
 	  plotLineNormalized: function(line, options) {
-	    line = line.map(function(p) {return [p[0]*this.canvas.width, (1-p[1])*this.canvas.height]}, this)
+	    line = line.map(function(p) {return [p[0]*this.canvas.width, p[1]*this.canvas.width]}, this)
 	    this.plotLine(line, options)
 	  },
 
@@ -243,6 +261,11 @@
 	    return points
 	  },
 
+	  plotPointsNormalized: function(line, options) {
+	    line = line.map(function(p) {return [p[0]*this.canvas.width, p[1]*this.canvas.width]}, this)
+	    this.plotPoints(line, options)
+	  },
+
 	  plotPointsNormalize: function(points, options) {
 	    this.plotPoints(this.normalize(points, options), options)
 	  },
@@ -251,13 +274,15 @@
 	    var options = options || {}
 	    this.context.fillStyle = options.color || "#000000"
 	    for (p of points) {
-	      this.context.fillRect(p[0]-2, p[1]-2, 4, 4)
+	      this.context.fillRect(p[0]-1, p[1]-1, 3, 3)
 	    }
 
 	  },
 
 	  plotLine: function(line, options) {
-	    // draw the kite
+	    // draw the line
+
+	    if (line.length < 2) { return }
 	    var ops = options || {}
 	    this.context.strokeStyle = ops.color || "#000000"
 
@@ -291,8 +316,17 @@
 
 	  clear : function() {
 	    this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
-	  },
+	  }
+
+
 	}
+
+
+	// Set Plotter's prototype to Plot's prototype
+	Plotter.prototype = Object.create(Plot.prototype);
+
+	// Set constructor back to Plotter
+	Plotter.prototype.constructor = Plotter
 
 
 /***/ },
@@ -301,6 +335,7 @@
 
 	module.exports = {
 	  get: get,
+	  deleteItem: deleteItem,
 	  post: post,
 	  button: button,
 	  merge: merge,
@@ -308,9 +343,17 @@
 	}
 
 	function get(path) {
+	  return genericRequest(path, "GET")
+	}
+
+	function deleteItem(path) {
+	  return genericRequest(path, "DELETE")
+	}
+
+	function genericRequest(path, method) {
 	  return new Promise( function(resolve, reject) {
 	    var xhr = new XMLHttpRequest();
-	    xhr.open("GET", path, true)
+	    xhr.open(method, path, true)
 	    xhr.onload = function (e) {
 	      if (xhr.readyState === 4) {
 	        if (xhr.status === 200) {
@@ -326,6 +369,7 @@
 	    xhr.send(null)
 	  })
 	}
+
 
 	function post(path, object) {
 	  return new Promise( function(resolve, reject) {
@@ -431,9 +475,7 @@
 	    this.ws.onmessage = function (msg) {
 	      if(msg.data instanceof ArrayBuffer) {
 	        var data = new Float64Array(msg.data)
-	        if (self.onBinary !== undefined) {
-	          self.onBinary(data)
-	        }
+	        if (self.onBinary) { self.onBinary(data) }
 	      } else {
 	        self.processText(msg.data)
 	      }
@@ -493,13 +535,17 @@
 
 	function PurePursuitController() {
 	  this.onCurvature = function(){}
+	  this.onTrack = function(){}
 	  this.currentPoint = 0
 	  this.lad = 0.15 // look ahead distance //TODO could be dynamic dependen on speed
+	  this.track = []
 	}
 
 	PurePursuitController.prototype = {
 	  loadTrack: function(track) {
 	    this.track = track
+	    this.reset()
+	    this.onTrack(track)
 	  },
 
 	  reset: function() {
@@ -507,21 +553,25 @@
 	  },
 
 	  hasTrack: function() {
-	    return (this.track && this.track.length > 0)
+	    return this.track.length > 0
 	  },
 
 	  newKinematic: function(kinematic) {
-	    if (!this.hasTrack()) { return }
+	    if (this.track.length == 0) { return }
 
 	    var kPos = [kinematic[0], kinematic[1]], omega = kinematic[2]
 
 	    // iterate until a point is outside Look ahead distance
 	    var l = this.distance(this.point(), kPos)
 
-	    while (l < this.lad) {
+	    var loopCount = 0
+	    while (l < this.lad && loopCount < this.track.length) {
 	      this.next()
 	      l = this.distance(this.point(), kPos)
+	      loopCount += 1
 	    }
+
+	    if (l < this.lad) { return }
 
 	    omega = (omega + 100*Math.PI) % (2*Math.PI) // works for up to 50 negative rotations
 
@@ -573,13 +623,13 @@
 
 	function KitePositionSystem() {
 	  this.onKinematic = function() {} // do something epic
-	  this.updateInterval = 0.01 //s
+	  this.updateInterval = 0.02 //s
 	  this.lbd = 0.03 // look back distance
 	  this.lbdMax = 0.1 // velocity and direction
 	  this.minDt = 0.03
 	  this.resetCount = 0
-	  this.trackExtrapolationBufferSize = 500
-	  this.trackBufferSize = 500
+	  this.trackExtrapolationBufferSize = 100
+	  this.trackBufferSize = 100
 	  this.setup()
 	  this.start()
 	}
@@ -698,7 +748,7 @@
 	    time: r[0],
 	    pos: {
 	      x: r[1],
-	      y: ((1-r[2]) * 3/4), // TODO: normalize in iOS app?
+	      y: r[2], // TODO: normalize in iOS app?
 	    }
 	  }
 	}
@@ -807,8 +857,8 @@
 	var post = Util.post
 
 	function TrackGenerator(id, plot) {
-
-	  this.points = [] // reverse order
+	  this.onChange = function() {} // when a track is saved or deleted
+	  this.track = [] // reverse order
 	  this.flag = false
 	  this.plot = plot
 
@@ -819,9 +869,12 @@
 	  var ptSave = button("save", function() {
 	    self.save()
 	  })
+	  var ptClear = button("clear", function() {
+	    self.reset()
+	  })
 
 	  pathTrackingDiv.appendChild(ptSave)
-
+	  pathTrackingDiv.appendChild(ptClear)
 
 	  this.plot.canvas.addEventListener("mousemove", function (e) {
 	    self.findxy('move', e)
@@ -842,16 +895,28 @@
 	TrackGenerator.prototype = {
 
 	  getTrack: function() {
-	    return this.points.reverse().map(function(e) {
+	    return this.track.map(function(e) {
 	      return [e[0]/this.plot.canvas.width, e[1]/this.plot.canvas.width]
 	    }, this)
+	  },
+
+	  getTrackUnnormalized() {
+	    return this.track
+	  },
+
+	  hasTrack: function() {
+	    return (this.track.length > 0)
+	  },
+
+	  reset: function() {
+	    this.track = []
 	  },
 
 	  findxy: function(res, e) {
 	      var point = findPoint(e, this.plot.canvas)
 	      if (res == 'down') {
 	          this.flag = true
-	          this.points.unshift(point)
+	          this.track.unshift(point)
 	      }
 	      if (res == 'up' || res == "out") {
 	          this.flag = false
@@ -859,21 +924,19 @@
 
 	      if (res == 'move') {
 	          if (this.flag) {
-	              this.points.unshift(point)
-	              this.drawLastSegment()
+	              this.track.push(point)
 	          }
 	      }
 	  },
 
-	  drawLastSegment: function() {
-	    var line = [this.points[0], this.points[1]]
-	    this.plot.plotLine(line)
-	  },
-
 	  save: function() {
+	    var self = this
+
 	    post("/tracks", this.getTrack())
 	    .then( function(res) {
 	      console.log("Wickied track saved")
+	      self.reset() // reset
+	      self.onChange()
 	    })
 	    .catch( function(err) {
 	      console.error("Woops", err)
@@ -941,23 +1004,69 @@
 	module.exports = Tracks
 
 	const util = __webpack_require__(3)
+	const Plot = __webpack_require__(2).Plot
 
-	function Tracks(id) {
+	function Tracks(id, purePursuitController) {
 	  this.parrentElement = document.getElementById("tracks")
+	  this.purePursuitController = purePursuitController
 
-	  util.get("/tracks")
-	  .then( function(res) {
-	    console.log(res)
-	  })
-	  .catch( function(err) {
-	    console.error("damit", err)
-	  })
-
+	  this.load()
 	}
 
 	Tracks.prototype = {
 
+	  load: function() {
+	    // clean up
+	    while (this.parrentElement.firstChild) {
+	      this.parrentElement.removeChild(this.parrentElement.firstChild);
+	    }
 
+	    var self = this
+	    util.get("/tracks")
+	    .then( function(res) {
+	      res.forEach(function(e, i) {
+	          Tracks.getTrack(i)
+	          .then( function( path ) {
+	            var trackElement = new Track(i, path, self, self.purePursuitController)
+	            self.parrentElement.appendChild(trackElement)
+	          })
+	      }, this)
+	    })
+	    .catch( function(err) {
+	      console.error("damit", err)
+	    })
+	  }
+	}
+
+	Tracks.getTrack = function(id) { // promise
+	  return util.get("/tracks/" + id)
+	}
+
+	Tracks.deleteTrack = function(id) {
+	  return util.deleteItem("/tracks/" + id)
+	}
+
+	function Track(id, path, tracks, purePursuitController) {
+	  var parrentElement = document.createElement("div")
+
+	  var plot = new Plot(80,60)
+	  plot.plotLineNormalized(path)
+	  parrentElement.appendChild(plot.canvas)
+
+	  var btload = util.button("load", function() {
+	    purePursuitController.loadTrack(path)
+	  })
+	  parrentElement.appendChild(btload)
+
+	  var btDelete = util.button("delete", function() {
+	    Tracks.deleteTrack(id)
+	    .then( function() {
+	      tracks.load()
+	    })
+	  })
+	  parrentElement.appendChild(btDelete)
+
+	  return parrentElement
 	}
 
 

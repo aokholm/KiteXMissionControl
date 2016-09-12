@@ -1,28 +1,29 @@
-module.exports = Plotter
+module.exports = {
+  Plotter: Plotter,
+  Plot: Plot
+}
 
 var util = require('./util.js')
 var merge = util.merge
 var button = util.button
 
 function Plotter(id, width, height) {
+  Plot.call(this, width, height)
+
+  this.container = document.getElementById(id)
+  this.container.appendChild(this.canvas)
+}
+
+function Plot(width, height) {
   this.canvas = document.createElement("canvas")
   this.canvas.width = width
   this.canvas.height = height
   this.context = this.canvas.getContext("2d")
-  this.container = document.getElementById(id)
-  this.container.appendChild(this.canvas)
-  var self = this
-  var btClear = button("clear", function() {
-    self.clear()
-  })
-
-  this.container.appendChild(btClear)
-
 }
 
-Plotter.prototype = {
+Plot.prototype = {
   plotLineNormalized: function(line, options) {
-    line = line.map(function(p) {return [p[0]*this.canvas.width, (1-p[1])*this.canvas.height]}, this)
+    line = line.map(function(p) {return [p[0]*this.canvas.width, p[1]*this.canvas.width]}, this)
     this.plotLine(line, options)
   },
 
@@ -48,6 +49,11 @@ Plotter.prototype = {
     return points
   },
 
+  plotPointsNormalized: function(line, options) {
+    line = line.map(function(p) {return [p[0]*this.canvas.width, p[1]*this.canvas.width]}, this)
+    this.plotPoints(line, options)
+  },
+
   plotPointsNormalize: function(points, options) {
     this.plotPoints(this.normalize(points, options), options)
   },
@@ -56,13 +62,15 @@ Plotter.prototype = {
     var options = options || {}
     this.context.fillStyle = options.color || "#000000"
     for (p of points) {
-      this.context.fillRect(p[0]-2, p[1]-2, 4, 4)
+      this.context.fillRect(p[0]-1, p[1]-1, 3, 3)
     }
 
   },
 
   plotLine: function(line, options) {
-    // draw the kite
+    // draw the line
+
+    if (line.length < 2) { return }
     var ops = options || {}
     this.context.strokeStyle = ops.color || "#000000"
 
@@ -96,5 +104,14 @@ Plotter.prototype = {
 
   clear : function() {
     this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
-  },
+  }
+
+
 }
+
+
+// Set Plotter's prototype to Plot's prototype
+Plotter.prototype = Object.create(Plot.prototype);
+
+// Set constructor back to Plotter
+Plotter.prototype.constructor = Plotter

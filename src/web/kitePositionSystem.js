@@ -3,13 +3,13 @@ module.exports = KitePositionSystem
 
 function KitePositionSystem() {
   this.onKinematic = function() {} // do something epic
-  this.updateInterval = 0.01 //s
+  this.updateInterval = 0.02 //s
   this.lbd = 0.03 // look back distance
   this.lbdMax = 0.1 // velocity and direction
   this.minDt = 0.03
   this.resetCount = 0
-  this.trackExtrapolationBufferSize = 500
-  this.trackBufferSize = 500
+  this.trackExtrapolationBufferSize = 100
+  this.trackBufferSize = 100
   this.setup()
   this.start()
 }
@@ -128,7 +128,7 @@ KitePositionSystem.kinematicRaw2Dict = function(r) {
     time: r[0],
     pos: {
       x: r[1],
-      y: ((1-r[2]) * 3/4), // TODO: normalize in iOS app?
+      y: r[2], // TODO: normalize in iOS app?
     }
   }
 }

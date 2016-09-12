@@ -26,9 +26,7 @@ WebSocketController.prototype = {
     this.ws.onmessage = function (msg) {
       if(msg.data instanceof ArrayBuffer) {
         var data = new Float64Array(msg.data)
-        if (self.onBinary !== undefined) {
-          self.onBinary(data)
-        }
+        if (self.onBinary) { self.onBinary(data) }
       } else {
         self.processText(msg.data)
       }

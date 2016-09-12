@@ -1,5 +1,6 @@
 module.exports = {
   get: get,
+  deleteItem: deleteItem,
   post: post,
   button: button,
   merge: merge,
@@ -7,9 +8,17 @@ module.exports = {
 }
 
 function get(path) {
+  return genericRequest(path, "GET")
+}
+
+function deleteItem(path) {
+  return genericRequest(path, "DELETE")
+}
+
+function genericRequest(path, method) {
   return new Promise( function(resolve, reject) {
     var xhr = new XMLHttpRequest();
-    xhr.open("GET", path, true)
+    xhr.open(method, path, true)
     xhr.onload = function (e) {
       if (xhr.readyState === 4) {
         if (xhr.status === 200) {
@@ -25,6 +34,7 @@ function get(path) {
     xhr.send(null)
   })
 }
+
 
 function post(path, object) {
   return new Promise( function(resolve, reject) {

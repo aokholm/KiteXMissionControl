@@ -2,13 +2,17 @@ module.exports = PurePursuitController
 
 function PurePursuitController() {
   this.onCurvature = function(){}
+  this.onTrack = function(){}
   this.currentPoint = 0
   this.lad = 0.15 // look ahead distance //TODO could be dynamic dependen on speed
+  this.track = []
 }
 
 PurePursuitController.prototype = {
   loadTrack: function(track) {
     this.track = track
+    this.reset()
+    this.onTrack(track)
   },
 
   reset: function() {
@@ -16,21 +20,25 @@ PurePursuitController.prototype = {
   },
 
   hasTrack: function() {
-    return (this.track && this.track.length > 0)
+    return this.track.length > 0
   },
 
   newKinematic: function(kinematic) {
-    if (!this.hasTrack()) { return }
+    if (this.track.length == 0) { return }
 
     var kPos = [kinematic[0], kinematic[1]], omega = kinematic[2]
 
     // iterate until a point is outside Look ahead distance
     var l = this.distance(this.point(), kPos)
 
-    while (l < this.lad) {
+    var loopCount = 0
+    while (l < this.lad && loopCount < this.track.length) {
       this.next()
       l = this.distance(this.point(), kPos)
+      loopCount += 1
     }
+
+    if (l < this.lad) { return }
 
     omega = (omega + 100*Math.PI) % (2*Math.PI) // works for up to 50 negative rotations
 

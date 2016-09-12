@@ -1,6 +1,6 @@
 module.exports = SystemController
 
-var Plotter = require("./plotter.js")
+var Plotter = require("./plot.js").Plotter
 var WebSocketController = require("./webSocketController.js")
 var PurePursuitController = require("./purePursuitController.js")
 var KitePositionSystem = require("./kitePositionSystem.js")
@@ -18,7 +18,7 @@ function SystemController() {
   this.kitePositionSystem = new KitePositionSystem()
   this.motorController = new MotorController("motorController")
   this.logger = new Logger()
-  this.tracks = new Tracks("tracks")
+  this.tracks = new Tracks("tracks", this.purePursuitController)
 
   this.state = {
     motor: false,
@@ -29,6 +29,9 @@ function SystemController() {
   this.setup()
   this.setupKeyEvents()
   this.setupUI()
+
+  this.updateInterval = 0.02
+  this.interval = setInterval(this.plot.bind(this), this.updateInterval*1000)
 }
 
 
@@ -53,7 +56,10 @@ SystemController.prototype = {
       if (self.state.ai) {
         self.motorController.moveTo(MotorController.curvatureToPos(curvature))
       }
+    }
 
+    this.purePursuitController.onTrack = function(track) {
+      self.trackingPlot.plotLineNormalized(track)
     }
 
     this.motorController.onMovingToAbsolute = function(position) {
@@ -65,10 +71,8 @@ SystemController.prototype = {
       self.logger.newControl(position)
     }
 
-    var self = this
-    window.loadTrack = function() {
-      self.purePursuitController.loadTrack(self.trackGenerator.getTrack())
-      self.purePursuitController.reset()
+    this.trackGenerator.onChange = function() {
+      self.tracks.load()
     }
 
     this.webSocketController.connect()
@@ -109,6 +113,19 @@ SystemController.prototype = {
     this.ui.loggingBox = document.getElementById("loggingBox")
   },
 
+  plot: function() {
+    this.trackingPlot.clear()
+    this.trackingPlot.plotLineNormalized(this.kitePositionSystem.trackExtrapolation, {color: "#666"})
+    this.trackingPlot.plotPointsNormalized(this.kitePositionSystem.track, {color: "#66F"})
+    if (this.purePursuitController.hasTrack()) {
+      this.trackingPlot.plotLineNormalized(this.purePursuitController.track, {color: "#000"})
+      this.trackingPlot.plotPointsNormalized([this.purePursuitController.point()], {color: "#F00"})
+    }
+    if (this.trackGenerator.hasTrack()) {
+      this.trackingPlot.plotLine(this.trackGenerator.getTrackUnnormalized(), {color: "#F00"})
+    }
+
+  },
 
   toggleAI: function() {
     this.state.ai = !this.state.ai

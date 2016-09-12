@@ -5,8 +5,8 @@ var button = Util.button
 var post = Util.post
 
 function TrackGenerator(id, plot) {
-
-  this.points = [] // reverse order
+  this.onChange = function() {} // when a track is saved or deleted
+  this.track = [] // reverse order
   this.flag = false
   this.plot = plot
 
@@ -17,9 +17,12 @@ function TrackGenerator(id, plot) {
   var ptSave = button("save", function() {
     self.save()
   })
+  var ptClear = button("clear", function() {
+    self.reset()
+  })
 
   pathTrackingDiv.appendChild(ptSave)
-
+  pathTrackingDiv.appendChild(ptClear)
 
   this.plot.canvas.addEventListener("mousemove", function (e) {
     self.findxy('move', e)
@@ -40,16 +43,28 @@ function TrackGenerator(id, plot) {
 TrackGenerator.prototype = {
 
   getTrack: function() {
-    return this.points.reverse().map(function(e) {
+    return this.track.map(function(e) {
       return [e[0]/this.plot.canvas.width, e[1]/this.plot.canvas.width]
     }, this)
+  },
+
+  getTrackUnnormalized() {
+    return this.track
+  },
+
+  hasTrack: function() {
+    return (this.track.length > 0)
+  },
+
+  reset: function() {
+    this.track = []
   },
 
   findxy: function(res, e) {
       var point = findPoint(e, this.plot.canvas)
       if (res == 'down') {
           this.flag = true
-          this.points.unshift(point)
+          this.track.unshift(point)
       }
       if (res == 'up' || res == "out") {
           this.flag = false
@@ -57,21 +72,19 @@ TrackGenerator.prototype = {
 
       if (res == 'move') {
           if (this.flag) {
-              this.points.unshift(point)
-              this.drawLastSegment()
+              this.track.push(point)
           }
       }
   },
 
-  drawLastSegment: function() {
-    var line = [this.points[0], this.points[1]]
-    this.plot.plotLine(line)
-  },
-
   save: function() {
+    var self = this
+
     post("/tracks", this.getTrack())
     .then( function(res) {
       console.log("Wickied track saved")
+      self.reset() // reset
+      self.onChange()
     })
     .catch( function(err) {
       console.error("Woops", err)

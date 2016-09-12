@@ -69,6 +69,16 @@ function createGenericRestEndPoint(baseName, basePath) {
   })
 
   server.route({
+      method: 'DELETE',
+      path:'/' + baseName + '/{id}',
+      handler: function (request, reply) {
+          var fileName = fs.readdirSync(basePath)[encodeURIComponent(request.params.id)]
+          fs.unlink(basePath + fileName)
+          return reply("{}")
+      }
+  })
+
+  server.route({
       method: 'POST',
       path:'/' + baseName,
       handler: function (request, reply) {
