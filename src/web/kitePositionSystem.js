@@ -2,6 +2,7 @@
 module.exports = KitePositionSystem
 
 function KitePositionSystem() {
+  this.onKinematic = function() {} // do something epic
   this.updateInterval = 0.01 //s
   this.lbd = 0.03 // look back distance
   this.lbdMax = 0.1 // velocity and direction
@@ -14,10 +15,6 @@ function KitePositionSystem() {
 }
 
 KitePositionSystem.prototype = {
-
-  onKinematic: function(cb) {
-    this.onKinematic = cb
-  },
 
   setup : function() {
     var x = 0.5
@@ -57,9 +54,7 @@ KitePositionSystem.prototype = {
     this.trackExtrapolation.push([this.kite.x, this.kite.y, timestamp])
     this.lastTime = timestamp
 
-    if (this.onKinematic) {
-      this.onKinematic(this.kite.kinematic())
-    }
+    this.onKinematic(this.kite.kinematic())
 
     if (this.trackExtrapolation.length == this.trackExtrapolationBufferSize) {
       this.trackExtrapolation.shift()
@@ -101,7 +96,7 @@ KitePositionSystem.prototype = {
     }
   },
 
-  motorMoveTo: function(pos) {
+  motorMovingTo: function(pos) {
     this.motor.moveTo(pos)
   },
 

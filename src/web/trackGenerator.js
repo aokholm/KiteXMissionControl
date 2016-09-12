@@ -14,16 +14,11 @@ function TrackGenerator(id, plot) {
 
 
   var pathTrackingDiv = document.getElementById(id)
-  var ptStart = button("start", function() {
+  var ptSave = button("save", function() {
     self.save()
   })
-  // var ptClear = createButton("clear", functio())
-  // var ptStop = createButton("stop", "stopKite()")
-  // var ptSend = createButton("sendTrack", "sendTrack()")
-  pathTrackingDiv.appendChild(ptStart)
-  // pathTrackingDiv.appendChild(ptClear)
-  // pathTrackingDiv.appendChild(ptStop)
-  // pathTrackingDiv.appendChild(ptSend)
+
+  pathTrackingDiv.appendChild(ptSave)
 
 
   this.plot.canvas.addEventListener("mousemove", function (e) {
@@ -46,8 +41,8 @@ TrackGenerator.prototype = {
 
   getTrack: function() {
     return this.points.reverse().map(function(e) {
-      return [e[0]/400, e[1]/400]
-    })
+      return [e[0]/this.plot.canvas.width, e[1]/this.plot.canvas.width]
+    }, this)
   },
 
   findxy: function(res, e) {
@@ -74,8 +69,6 @@ TrackGenerator.prototype = {
   },
 
   save: function() {
-    console.log(this.getTrack());
-
     post("/tracks", this.getTrack())
     .then( function(res) {
       console.log("Wickied track saved")

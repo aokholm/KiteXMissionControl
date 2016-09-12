@@ -77,6 +77,7 @@ function createGenericRestEndPoint(baseName, basePath) {
           jsonfile.writeFile(file, request.payload, err => {
             if (err) { console.error(err) }
           })
+          reply()
       }
   })
 

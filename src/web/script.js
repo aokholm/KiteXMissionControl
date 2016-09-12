@@ -5,7 +5,7 @@ var KitePositionSystem = require("./kitePositionSystem.js")
 var MotorController = require("./motorController.js")
 var TrackGenerator = require("./trackGenerator.js")
 
-window.wsc = new WebSocketController()
+window.webSocketController = new WebSocketController()
 
 var purePursuitController = new PurePursuitController()
 
@@ -15,20 +15,43 @@ var trackGenerator = new TrackGenerator("trackGenerator", trackingPlot)
 
 var kitePositionSystem = new KitePositionSystem()
 
-kitePositionSystem.onKinematic = function(k) {
-  // console.log(k[1])
-  trackingPlot.plotPoints([[k[0]*400, k[1]*400]])
-}
+var motorController = new MotorController()
 
+var logger = new Logger()
 
-wsc.onBinary = function(data) {
+webSocketController.onBinary = function(data) {
   var kinematic = KitePositionSystem.kinematicRaw2Dict(data)
   kitePositionSystem.newTrackingData(kinematic)
 }
 
+kitePositionSystem.onKinematic = function(k) {
+  purePursuitController.newKinematic(k)
+  trackingPlot.plotPoints([[k[0]*400, k[1]*400]])
+  logger.newKinematic(k)
+}
+
+purePursuitController.onCurvature = function(curvature) {
+  motorController.moveTo(MotorController.curvatureToPos(curvature))
+}
+
+motorController.onMovingToAbsolute = function(position) {
+  webSocketController.sendMotorPosition(position)
+}
+
+motorController.onMovingToRelative = function(position) {
+  kitePositionSystem.motorMovingTo(desiredMotorPosition)
+  logger.newControl(position)
+}
+
+
+
 
 // this.controller.motorPos(this.x, this.y, this.direction, this.velocity)
 
+window.loadTrack = function() {
+  purePursuitController.loadTrack(trackGenerator.getTrack())
+  purePursuitController.reset()
+}
 
 
 /** Key press  **/
@@ -37,32 +60,32 @@ document.onkeypress = function (e) {
     var charCode = (typeof e.which == "number") ? e.which : e.keyCode
 
     if (charCode === 97) { // a
-      wsc.toggleAI()
+      webSocketController.toggleAI()
     }
 
     if (charCode === 122) { // z
-      wsc.zero()
+      webSocketController.zero()
     }
 
     if (charCode === 109) { // m
-      wsc.toggleMotor()
+      webSocketController.toggleMotor()
     }
 
     if (charCode === 100) { // d
-      wsc.ws.send("ai,dirDecrement")
+      webSocketController.ws.send("ai,dirDecrement")
     }
 
     if (charCode === 105) { // i
-      wsc.ws.send("ai,dirIncrement")
+      webSocketController.ws.send("ai,dirIncrement")
     }
 
     if (charCode === 115) { // s
-      wsc.ws.send("camera,capture")
+      webSocketController.ws.send("camera,capture")
     }
 
     if (charCode === 108) { // l
-      wsc.toggleLogging()
+      webSocketController.toggleLogging()
     }
 }
 
-wsc.connect()
+webSocketController.connect()

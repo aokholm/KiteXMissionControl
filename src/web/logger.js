@@ -15,7 +15,7 @@ Logger.prototype = {
 
   newKinematic: function(k) {
       if (this.on) {
-        k.t = Date.now()/1000
+        k.push(Date.now()/1000)
         this.controls.push( k )
       }
   },

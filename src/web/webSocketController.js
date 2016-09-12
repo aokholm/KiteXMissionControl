@@ -38,9 +38,9 @@ WebSocketController.prototype = {
     }
   },
 
-  newControlSliderValue: function(val) {
+  sendMotorPosition: function(val) {
     // do nothing if last move was less than 25 ms ago
-    if(Date.now() - this.lastMove > 25 && !this.ai) {
+    if(Date.now() - this.lastMove > 25) {
       var buffer = new Int16Array(1)
       buffer[0] = val
       this.ws.send( buffer )

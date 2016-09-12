@@ -51,7 +51,7 @@
 	var MotorController = __webpack_require__(6)
 	var TrackGenerator = __webpack_require__(7)
 
-	window.wsc = new WebSocketController()
+	window.webSocketController = new WebSocketController()
 
 	var purePursuitController = new PurePursuitController()
 
@@ -61,20 +61,43 @@
 
 	var kitePositionSystem = new KitePositionSystem()
 
-	kitePositionSystem.onKinematic = function(k) {
-	  // console.log(k[1])
-	  trackingPlot.plotPoints([[k[0]*400, k[1]*400]])
-	}
+	var motorController = new MotorController()
 
+	var logger = new Logger()
 
-	wsc.onBinary = function(data) {
+	webSocketController.onBinary = function(data) {
 	  var kinematic = KitePositionSystem.kinematicRaw2Dict(data)
 	  kitePositionSystem.newTrackingData(kinematic)
 	}
 
+	kitePositionSystem.onKinematic = function(k) {
+	  purePursuitController.newKinematic(k)
+	  trackingPlot.plotPoints([[k[0]*400, k[1]*400]])
+	  logger.newKinematic(k)
+	}
+
+	purePursuitController.onCurvature = function(curvature) {
+	  motorController.moveTo(MotorController.curvatureToPos(curvature))
+	}
+
+	motorController.onMovingToAbsolute = function(position) {
+	  webSocketController.sendMotorPosition(position)
+	}
+
+	motorController.onMovingToRelative = function(position) {
+	  kitePositionSystem.motorMovingTo(desiredMotorPosition)
+	  logger.newControl(position)
+	}
+
+
+
 
 	// this.controller.motorPos(this.x, this.y, this.direction, this.velocity)
 
+	window.loadTrack = function() {
+	  purePursuitController.loadTrack(trackGenerator.getTrack())
+	  purePursuitController.reset()
+	}
 
 
 	/** Key press  **/
@@ -83,35 +106,35 @@
 	    var charCode = (typeof e.which == "number") ? e.which : e.keyCode
 
 	    if (charCode === 97) { // a
-	      wsc.toggleAI()
+	      webSocketController.toggleAI()
 	    }
 
 	    if (charCode === 122) { // z
-	      wsc.zero()
+	      webSocketController.zero()
 	    }
 
 	    if (charCode === 109) { // m
-	      wsc.toggleMotor()
+	      webSocketController.toggleMotor()
 	    }
 
 	    if (charCode === 100) { // d
-	      wsc.ws.send("ai,dirDecrement")
+	      webSocketController.ws.send("ai,dirDecrement")
 	    }
 
 	    if (charCode === 105) { // i
-	      wsc.ws.send("ai,dirIncrement")
+	      webSocketController.ws.send("ai,dirIncrement")
 	    }
 
 	    if (charCode === 115) { // s
-	      wsc.ws.send("camera,capture")
+	      webSocketController.ws.send("camera,capture")
 	    }
 
 	    if (charCode === 108) { // l
-	      wsc.toggleLogging()
+	      webSocketController.toggleLogging()
 	    }
 	}
 
-	wsc.connect()
+	webSocketController.connect()
 
 
 /***/ },
@@ -328,9 +351,9 @@
 	    }
 	  },
 
-	  newControlSliderValue: function(val) {
+	  sendMotorPosition: function(val) {
 	    // do nothing if last move was less than 25 ms ago
-	    if(Date.now() - this.lastMove > 25 && !this.ai) {
+	    if(Date.now() - this.lastMove > 25) {
 	      var buffer = new Int16Array(1)
 	      buffer[0] = val
 	      this.ws.send( buffer )
@@ -479,8 +502,9 @@
 	module.exports = PurePursuitController
 
 	function PurePursuitController() {
+	  this.onCurvature = function(){}
 	  this.currentPoint = 0
-	  this.lad = 0.15 // look ahead distance
+	  this.lad = 0.15 // look ahead distance //TODO could be dynamic dependen on speed
 	}
 
 	PurePursuitController.prototype = {
@@ -500,7 +524,9 @@
 	    return this.update([x, y], direction)
 	  },
 
-	  update: function(kPos, omega) {
+	  newKinematic: function(kinematic) {
+	    var kPos = [kinematic[0], kinematic[1]], omega = kinematic[2]
+
 	    // iterate until a point is outside Look ahead distance
 	    var l = this.distance(this.point(), kPos)
 
@@ -519,9 +545,8 @@
 	    if (theta_e > Math.PI) {
 	      theta_e -= 2*Math.PI
 	    }
-	    var gamma = 2*theta_e / l
-
-	    return gamma*150 // formula derived from observations
+	    var gamma = 2*theta_e / l // gamme is the curvature
+	    this.onCurvature(gamma)
 	  },
 
 	  angleToPoint(pTo, pFrom) {
@@ -559,6 +584,7 @@
 	module.exports = KitePositionSystem
 
 	function KitePositionSystem() {
+	  this.onKinematic = function() {} // do something epic
 	  this.updateInterval = 0.01 //s
 	  this.lbd = 0.03 // look back distance
 	  this.lbdMax = 0.1 // velocity and direction
@@ -571,10 +597,6 @@
 	}
 
 	KitePositionSystem.prototype = {
-
-	  onKinematic: function(cb) {
-	    this.onKinematic = cb
-	  },
 
 	  setup : function() {
 	    var x = 0.5
@@ -614,9 +636,7 @@
 	    this.trackExtrapolation.push([this.kite.x, this.kite.y, timestamp])
 	    this.lastTime = timestamp
 
-	    if (this.onKinematic) {
-	      this.onKinematic(this.kite.kinematic())
-	    }
+	    this.onKinematic(this.kite.kinematic())
 
 	    if (this.trackExtrapolation.length == this.trackExtrapolationBufferSize) {
 	      this.trackExtrapolation.shift()
@@ -658,7 +678,7 @@
 	    }
 	  },
 
-	  motorMoveTo: function(pos) {
+	  motorMovingTo: function(pos) {
 	    this.motor.moveTo(pos)
 	  },
 
@@ -741,8 +761,9 @@
 
 	module.exports = MotorController
 
-	function MotorController(onChange) {
-	  this.onChange = onChange // function
+	function MotorController() {
+	  this.onMovingToRelative = function() {}
+	  this.onMovingToAbsolute = function() {}
 	  this.motorRelativePos = 0
 	  this.motorOffset = 0
 	  this.motorAmplitude = 200 // 200 mm +-
@@ -757,13 +778,18 @@
 	  moveTo: function(relativePos) {
 	    this.motorRelativePos = relativePos
 	    var motorAbsPos = motorRelativePos + motorOffset // 400 steps pr 40 mm
-	    onChange(motorAbsPos)
+	    this.onMovingToAbsolute(motorAbsPos)
+	    this.onMovingToRelative(relativePos)
 	  },
 
 	  moveToNormalized: function(val) {
 	    this.newPosition( (val*2-1) * this.motorAmplitude * 400 / 40 )
 	  }
 
+	}
+
+	MotorController.curvatureToPos = function(curvature) {
+	  return curvature * 150 // derived from observations
 	}
 
 
@@ -787,16 +813,11 @@
 
 
 	  var pathTrackingDiv = document.getElementById(id)
-	  var ptStart = button("start", function() {
+	  var ptSave = button("save", function() {
 	    self.save()
 	  })
-	  // var ptClear = createButton("clear", functio())
-	  // var ptStop = createButton("stop", "stopKite()")
-	  // var ptSend = createButton("sendTrack", "sendTrack()")
-	  pathTrackingDiv.appendChild(ptStart)
-	  // pathTrackingDiv.appendChild(ptClear)
-	  // pathTrackingDiv.appendChild(ptStop)
-	  // pathTrackingDiv.appendChild(ptSend)
+
+	  pathTrackingDiv.appendChild(ptSave)
 
 
 	  this.plot.canvas.addEventListener("mousemove", function (e) {
@@ -819,8 +840,8 @@
 
 	  getTrack: function() {
 	    return this.points.reverse().map(function(e) {
-	      return [e[0]/400, e[1]/400]
-	    })
+	      return [e[0]/this.plot.canvas.width, e[1]/this.plot.canvas.width]
+	    }, this)
 	  },
 
 	  findxy: function(res, e) {
@@ -847,8 +868,6 @@
 	  },
 
 	  save: function() {
-	    console.log(this.getTrack());
-
 	    post("/tracks", this.getTrack())
 	    .then( function(res) {
 	      console.log("Wickied track saved")

@@ -1,8 +1,9 @@
 module.exports = PurePursuitController
 
 function PurePursuitController() {
+  this.onCurvature = function(){}
   this.currentPoint = 0
-  this.lad = 0.15 // look ahead distance
+  this.lad = 0.15 // look ahead distance //TODO could be dynamic dependen on speed
 }
 
 PurePursuitController.prototype = {
@@ -22,7 +23,9 @@ PurePursuitController.prototype = {
     return this.update([x, y], direction)
   },
 
-  update: function(kPos, omega) {
+  newKinematic: function(kinematic) {
+    var kPos = [kinematic[0], kinematic[1]], omega = kinematic[2]
+
     // iterate until a point is outside Look ahead distance
     var l = this.distance(this.point(), kPos)
 
@@ -41,9 +44,8 @@ PurePursuitController.prototype = {
     if (theta_e > Math.PI) {
       theta_e -= 2*Math.PI
     }
-    var gamma = 2*theta_e / l
-
-    return gamma*150 // formula derived from observations
+    var gamma = 2*theta_e / l // gamme is the curvature
+    this.onCurvature(gamma)
   },
 
   angleToPoint(pTo, pFrom) {
