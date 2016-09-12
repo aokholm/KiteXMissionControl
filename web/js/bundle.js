@@ -62,6 +62,7 @@
 	var MotorController = __webpack_require__(7)
 	var TrackGenerator = __webpack_require__(8)
 	var Logger = __webpack_require__(9)
+	var Tracks = __webpack_require__(10)
 
 	function SystemController() {
 
@@ -72,6 +73,7 @@
 	  this.kitePositionSystem = new KitePositionSystem()
 	  this.motorController = new MotorController("motorController")
 	  this.logger = new Logger()
+	  this.tracks = new Tracks("tracks")
 
 	  this.state = {
 	    motor: false,
@@ -298,10 +300,31 @@
 /***/ function(module, exports) {
 
 	module.exports = {
+	  get: get,
 	  post: post,
 	  button: button,
 	  merge: merge,
 	  slider: slider
+	}
+
+	function get(path) {
+	  return new Promise( function(resolve, reject) {
+	    var xhr = new XMLHttpRequest();
+	    xhr.open("GET", path, true)
+	    xhr.onload = function (e) {
+	      if (xhr.readyState === 4) {
+	        if (xhr.status === 200) {
+	          resolve(JSON.parse(xhr.responseText))
+	        } else {
+	          reject(xhr.statusText)
+	        }
+	      }
+	    }
+	    xhr.onerror = function (e) {
+	      reject(xhr.statusText)
+	    }
+	    xhr.send(null)
+	  })
 	}
 
 	function post(path, object) {
@@ -332,20 +355,22 @@
 	  return button
 	}
 
-	function slider(action) {
+	function slider(onInputCallback, options) {
 	  var slider = document.createElement("input")
-	  var options = {
+	  var defaults = {
 	    type: "range",
 	    min: 0,
 	    max: 1000,
 	    step: 1,
 	    style: "width:400px"
 	  }
+	  options = merge(defaults, options || {})
 
 	  for (var key in options) {
 	    slider.setAttribute(key, options[key])
 	  }
-	  slider.addEventListener("input", function() { action(slider.value) })
+
+	  slider.addEventListener("input", function() { onInputCallback(slider.value) })
 	  return slider
 	}
 
@@ -750,6 +775,11 @@
 	  },
 
 	  moveTo: function(relativePos) {
+	    this.moveToInternal(relativePos)
+	    this.slider.value = (relativePos/ ( 2 * this.motorAmplitude * 400/ 40) + 0.5) * 1000
+	  },
+
+	  moveToInternal: function(relativePos) {
 	    this.motorRelativePos = relativePos
 	    var motorAbsPos = relativePos + this.motorOffset // 400 steps pr 40 mm
 	    this.onMovingToAbsolute(motorAbsPos)
@@ -757,7 +787,7 @@
 	  },
 
 	  moveToNormalized: function(val) {
-	    this.moveTo( (val*2-1) * this.motorAmplitude * 400 / 40 )
+	    this.moveToInternal( (val*2-1) * this.motorAmplitude * 400 / 40 )
 	  }
 	}
 
@@ -901,6 +931,33 @@
 	      console.error("session saved error", err)
 	    })
 	  }
+	}
+
+
+/***/ },
+/* 10 */
+/***/ function(module, exports, __webpack_require__) {
+
+	module.exports = Tracks
+
+	const util = __webpack_require__(3)
+
+	function Tracks(id) {
+	  this.parrentElement = document.getElementById("tracks")
+
+	  util.get("/tracks")
+	  .then( function(res) {
+	    console.log(res)
+	  })
+	  .catch( function(err) {
+	    console.error("damit", err)
+	  })
+
+	}
+
+	Tracks.prototype = {
+
+
 	}
 
 

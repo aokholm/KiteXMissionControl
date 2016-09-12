@@ -26,6 +26,11 @@ MotorController.prototype = {
   },
 
   moveTo: function(relativePos) {
+    this.moveToInternal(relativePos)
+    this.slider.value = (relativePos/ ( 2 * this.motorAmplitude * 400/ 40) + 0.5) * 1000
+  },
+
+  moveToInternal: function(relativePos) {
     this.motorRelativePos = relativePos
     var motorAbsPos = relativePos + this.motorOffset // 400 steps pr 40 mm
     this.onMovingToAbsolute(motorAbsPos)
@@ -33,7 +38,7 @@ MotorController.prototype = {
   },
 
   moveToNormalized: function(val) {
-    this.moveTo( (val*2-1) * this.motorAmplitude * 400 / 40 )
+    this.moveToInternal( (val*2-1) * this.motorAmplitude * 400 / 40 )
   }
 }
 

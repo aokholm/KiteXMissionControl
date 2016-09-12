@@ -7,6 +7,7 @@ var KitePositionSystem = require("./kitePositionSystem.js")
 var MotorController = require("./motorController.js")
 var TrackGenerator = require("./trackGenerator.js")
 var Logger = require("./logger.js")
+var Tracks = require("./tracks.js")
 
 function SystemController() {
 
@@ -17,6 +18,7 @@ function SystemController() {
   this.kitePositionSystem = new KitePositionSystem()
   this.motorController = new MotorController("motorController")
   this.logger = new Logger()
+  this.tracks = new Tracks("tracks")
 
   this.state = {
     motor: false,

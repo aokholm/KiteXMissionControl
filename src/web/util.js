@@ -1,8 +1,29 @@
 module.exports = {
+  get: get,
   post: post,
   button: button,
   merge: merge,
   slider: slider
+}
+
+function get(path) {
+  return new Promise( function(resolve, reject) {
+    var xhr = new XMLHttpRequest();
+    xhr.open("GET", path, true)
+    xhr.onload = function (e) {
+      if (xhr.readyState === 4) {
+        if (xhr.status === 200) {
+          resolve(JSON.parse(xhr.responseText))
+        } else {
+          reject(xhr.statusText)
+        }
+      }
+    }
+    xhr.onerror = function (e) {
+      reject(xhr.statusText)
+    }
+    xhr.send(null)
+  })
 }
 
 function post(path, object) {
@@ -33,20 +54,22 @@ function button(text, action) {
   return button
 }
 
-function slider(action) {
+function slider(onInputCallback, options) {
   var slider = document.createElement("input")
-  var options = {
+  var defaults = {
     type: "range",
     min: 0,
     max: 1000,
     step: 1,
     style: "width:400px"
   }
+  options = merge(defaults, options || {})
 
   for (var key in options) {
     slider.setAttribute(key, options[key])
   }
-  slider.addEventListener("input", function() { action(slider.value) })
+
+  slider.addEventListener("input", function() { onInputCallback(slider.value) })
   return slider
 }
 
