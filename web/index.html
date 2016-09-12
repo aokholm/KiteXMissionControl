@@ -24,37 +24,23 @@
   <body>
     <div class="box">
       <label><input type="checkbox" id="connectedBox" value="first_checkbox"> Connected</label> <a href="javascript:wsc.connect()">reconnect</a> <br>
-      <label><input type="checkbox" id="loggingBox" value="second_checkbox"> Logging</label> <br>
-      <!-- <label><input type="checkbox" id="motorConnected"> Motor Conencted</label> <br> -->
-      <label><input type="checkbox" id="motorPowerBox"> Motor Power</label> <br>
-      <label><input type="checkbox" id="cameraTrackingBox"> Camera Tracking</label> <br>
-      <label><input type="checkbox" id="aiBox"> AI Tracking</label> <br>
+      <label><input type="checkbox" id="loggingBox" value="second_checkbox"> Logging (l)</label> <br>
+      <label><input type="checkbox" id="motorPowerBox"> Motor Power (m)</label> <br>
+      <label><input type="checkbox" id="aiBox"> AI Tracking (a)</label> <br>
 
       <label>Main Battery Voltage: </label><label id="bat1"></label><br>
       <label>Phone Battery Percentage: </label><label id="phoneBat"></label> <br>
-      <label>Direction: </label><label id="dir"></label> <br>
-      <label>Direction Count: </label><label id="dirCount"></label> <br>
+
+      <p>Other commands: Save image (s), Zero motor position (z)
 
       <p>Control</p>
       <input id="sliderControl" type="range" min="0" max="1000" step="1" oninput="wsc.newControlSliderValue(this.value)" style="width:400px"/>
       <br>
-      <button type="button" onclick="wsc.zero()">Zero (z)</button>
-      <br>
-
-      <button type="button" onclick="wsc.ws.send('motor,on')">Motor Power On (m)</button>
-      <button type="button" onclick="wsc.ws.send('motor,off')">Motor Power Off (m)</button>
-      <br>
-      <button type="button" onclick="wsc.ws.send('camera,on')">Camera Tracking On</button>
-      <button type="button" onclick="wsc.ws.send('camera,off')">Camera Tracking Off</button>
-      <button type="button" onclick="wsc.ws.send('camera,capture')">Camera Capture (s)</button>
-      <br>
-      <button type="button" onclick="wsc.aiOn()">AI On (a)</button>
-      <button type="button" onclick="wsc.aiOff()">AI Off (a)</button>
-      <button type="button" onclick="wsc.ws.send('ai,resetRotation')">AI Reset Rotation</button>
       <button type="button" onclick="loadTrack()">AI loadTrack</button>
-      <p>Amplitude</p>
-      <input id="sliderAmplitude" type="range" min="0" max="400" step="1" oninput="wsc.ws.send('motorAmplitude,' + this.value)" style="width:400px"/>
+
+      <div id="motorController"></div>
     </div>
+
 
 
     <div class="box">

@@ -1,6 +1,6 @@
 module.exports = Logger
 
-var post = require("./Util.js").post
+var post = require("./util.js").post
 
 function Logger() {
 }
@@ -11,6 +11,10 @@ Logger.prototype = {
     this.on = true
     this.controls = []
     this.kinematics = []
+  },
+
+  stop: function() {
+    this.on = false
   },
 
   newKinematic: function(k) {

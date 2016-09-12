@@ -44,106 +44,156 @@
 /* 0 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var Plotter = __webpack_require__(1)
-	var WebSocketController = __webpack_require__(3)
-	var PurePursuitController = __webpack_require__(4)
-	var KitePositionSystem = __webpack_require__(5)
-	var MotorController = __webpack_require__(6)
-	var TrackGenerator = __webpack_require__(7)
+	var SystemController = __webpack_require__(1)
 
-	window.webSocketController = new WebSocketController()
-
-	var purePursuitController = new PurePursuitController()
-
-	var trackingPlot = new Plotter("trackingPlot", 400, 300)
-
-	var trackGenerator = new TrackGenerator("trackGenerator", trackingPlot)
-
-	var kitePositionSystem = new KitePositionSystem()
-
-	var motorController = new MotorController()
-
-	var logger = new Logger()
-
-	webSocketController.onBinary = function(data) {
-	  var kinematic = KitePositionSystem.kinematicRaw2Dict(data)
-	  kitePositionSystem.newTrackingData(kinematic)
-	}
-
-	kitePositionSystem.onKinematic = function(k) {
-	  purePursuitController.newKinematic(k)
-	  trackingPlot.plotPoints([[k[0]*400, k[1]*400]])
-	  logger.newKinematic(k)
-	}
-
-	purePursuitController.onCurvature = function(curvature) {
-	  motorController.moveTo(MotorController.curvatureToPos(curvature))
-	}
-
-	motorController.onMovingToAbsolute = function(position) {
-	  webSocketController.sendMotorPosition(position)
-	}
-
-	motorController.onMovingToRelative = function(position) {
-	  kitePositionSystem.motorMovingTo(desiredMotorPosition)
-	  logger.newControl(position)
-	}
-
-
-
-
-	// this.controller.motorPos(this.x, this.y, this.direction, this.velocity)
-
-	window.loadTrack = function() {
-	  purePursuitController.loadTrack(trackGenerator.getTrack())
-	  purePursuitController.reset()
-	}
-
-
-	/** Key press  **/
-
-	document.onkeypress = function (e) {
-	    var charCode = (typeof e.which == "number") ? e.which : e.keyCode
-
-	    if (charCode === 97) { // a
-	      webSocketController.toggleAI()
-	    }
-
-	    if (charCode === 122) { // z
-	      webSocketController.zero()
-	    }
-
-	    if (charCode === 109) { // m
-	      webSocketController.toggleMotor()
-	    }
-
-	    if (charCode === 100) { // d
-	      webSocketController.ws.send("ai,dirDecrement")
-	    }
-
-	    if (charCode === 105) { // i
-	      webSocketController.ws.send("ai,dirIncrement")
-	    }
-
-	    if (charCode === 115) { // s
-	      webSocketController.ws.send("camera,capture")
-	    }
-
-	    if (charCode === 108) { // l
-	      webSocketController.toggleLogging()
-	    }
-	}
-
-	webSocketController.connect()
+	var systemController = new SystemController()
 
 
 /***/ },
 /* 1 */
 /***/ function(module, exports, __webpack_require__) {
 
+	module.exports = SystemController
+
+	var Plotter = __webpack_require__(2)
+	var WebSocketController = __webpack_require__(4)
+	var PurePursuitController = __webpack_require__(5)
+	var KitePositionSystem = __webpack_require__(6)
+	var MotorController = __webpack_require__(7)
+	var TrackGenerator = __webpack_require__(8)
+	var Logger = __webpack_require__(9)
+
+	function SystemController() {
+
+	  this.webSocketController = new WebSocketController()
+	  this.purePursuitController = new PurePursuitController()
+	  this.trackingPlot = new Plotter("trackingPlot", 400, 300)
+	  this.trackGenerator = new TrackGenerator("trackGenerator", this.trackingPlot)
+	  this.kitePositionSystem = new KitePositionSystem()
+	  this.motorController = new MotorController("motorController")
+	  this.logger = new Logger()
+
+	  this.state = {
+	    motor: false,
+	    ai: false,
+	    logging: false
+	  }
+
+	  this.setup()
+	  this.setupKeyEvents()
+	  this.setupUI()
+	}
+
+
+	SystemController.prototype = {
+	  setup: function() {
+
+	    var self = this
+
+	    this.webSocketController.onBinary = function(data) {
+	      var kinematic = KitePositionSystem.kinematicRaw2Dict(data)
+	      self.kitePositionSystem.newTrackingData(kinematic)
+	    }
+
+
+	    this.kitePositionSystem.onKinematic = function(k) {
+	      self.purePursuitController.newKinematic(k)
+	      self.trackingPlot.plotPoints([[k[0]*400, k[1]*400]])
+	      self.logger.newKinematic(k)
+	    }
+
+	    this.purePursuitController.onCurvature = function(curvature) {
+	      if (self.state.ai) {
+	        self.motorController.moveTo(MotorController.curvatureToPos(curvature))
+	      }
+
+	    }
+
+	    this.motorController.onMovingToAbsolute = function(position) {
+	      self.webSocketController.sendMotorPosition(position)
+	    }
+
+	    this.motorController.onMovingToRelative = function(position) {
+	      self.kitePositionSystem.motorMovingTo(position)
+	      self.logger.newControl(position)
+	    }
+
+	    var self = this
+	    window.loadTrack = function() {
+	      self.purePursuitController.loadTrack(self.trackGenerator.getTrack())
+	      self.purePursuitController.reset()
+	    }
+
+	    this.webSocketController.connect()
+	  },
+
+	  setupKeyEvents: function() {
+	    /** Key press  **/
+	    var self = this
+
+	    document.onkeypress = function (e) {
+	        var charCode = (typeof e.which == "number") ? e.which : e.keyCode
+
+	        if (charCode === 97) { // a
+	          self.toggleAI()
+	        }
+
+	        if (charCode === 108) { // l
+	          self.toggleLogging()
+	        }
+
+	        if (charCode === 109) { // m
+	          self.toggleMotor()
+	        }
+
+	        if (charCode === 122) { // z
+	          self.motorController.zero()
+	        }
+
+	        if (charCode === 115) { // s
+	          self.webSocketController.ws.send("camera,capture")
+	        }
+	    }
+	  },
+
+	  setupUI: function() {
+	    this.ui = {}
+	    this.ui.aiBox = document.getElementById("aiBox")
+	    this.ui.loggingBox = document.getElementById("loggingBox")
+	  },
+
+
+	  toggleAI: function() {
+	    this.state.ai = !this.state.ai
+	    this.ui.aiBox.checked = this.state.ai
+	  },
+
+	  toggleMotor: function() {
+	    this.state.motor = !this.state.motor
+	    this.state.motor ? this.webSocketController.ws.send('motor,on') : this.webSocketController.ws.send('motor,off')
+	  },
+
+	  toggleLogging: function() {
+	    this.state.logging = !this.state.logging
+	    this.ui.loggingBox.checked = this.state.logging
+
+	    if (this.state.logging) {
+	      this.logger.start()
+	    } else {
+	      this.logger.stop()
+	      this.logger.save()
+	    }
+	  }
+	}
+
+
+/***/ },
+/* 2 */
+/***/ function(module, exports, __webpack_require__) {
+
 	module.exports = Plotter
 
-	var util = __webpack_require__(2)
+	var util = __webpack_require__(3)
 	var merge = util.merge
 	var button = util.button
 
@@ -244,7 +294,7 @@
 
 
 /***/ },
-/* 2 */
+/* 3 */
 /***/ function(module, exports) {
 
 	module.exports = {
@@ -281,6 +331,9 @@
 	  return button
 	}
 
+	function slider(action) {
+	  var slider = document.createElement("input")
+	}
 
 	function merge() {
 	    var obj, name, copy,
@@ -308,7 +361,7 @@
 
 
 /***/ },
-/* 3 */
+/* 4 */
 /***/ function(module, exports) {
 
 	module.exports = WebSocketController
@@ -319,6 +372,7 @@
 	  this.logging = false
 	  this.motor = false
 	  this.startTime = 0
+	  this.onLoggingChanged = function() {}
 	}
 
 	WebSocketController.prototype = {
@@ -361,28 +415,11 @@
 	    }
 	  },
 
-	  zero: function() {
-	    this.ws.send('motor,zero') // zero in the WebSocketServer
-	    document.getElementById("sliderControl").value = 500
-	  },
-
-
 	  processText: function(data) {
 	    var input = data.split(',')
 	    var command = input[0]
 	    var value = input[1]
 	    switch (command) {
-	      case 'logging':
-	        switch (value) {
-	          case 'on':
-	            document.getElementById("loggingBox").checked = true
-	            break;
-	          case 'off':
-	            document.getElementById("loggingBox").checked = false
-	            break;
-	          default:
-	        }
-	        break
 	      case 'motor':
 	        console.log(data)
 	        switch (value) {
@@ -402,101 +439,15 @@
 	      case 'phoneBat':
 	        document.getElementById("phoneBat").innerHTML = (100*parseFloat(value)).toFixed(2)
 	        break
-	      case 'camera':
-	        console.log(data)
-	        switch (value) {
-	          case 'on':
-	            document.getElementById("cameraTrackingBox").checked = true
-	            break;
-	          case 'off':
-	            document.getElementById("cameraTrackingBox").checked = false
-	            break;
-	        }
-	        break
-	      case 'ai':
-	        console.log(data)
-	        switch (value) {
-	          case 'on':
-	            document.getElementById("aiBox").checked = true
-	            break;
-	          case 'off':
-	            document.getElementById("aiBox").checked = false
-	            break;
-	        }
-	        break
-	      case 'dir':
-	        document.getElementById("dir").innerHTML = parseFloat(value).toFixed(2)
-	        break
-	      case 'dirCount':
-	        document.getElementById("dirCount").innerHTML = parseFloat(value).toFixed(2)
-	        break
-	      case 'aiControlValue':
-	        console.log(value);
-	        document.getElementById("sliderControl").value = parseFloat(value)*1000
-	        break
-	      case 'S':
-	        var val = parseFloat(value)
-	        if (val < 10000) {
-	          this.ws.send('S,' + (val+1))
-	        } else {
-	          console.log("completed");
-	          console.log((Date.now() - this.startTime)/10000);
-	        }
-	        break
 	      default:
 	        console.log(data)
 	    }
-	  },
-
-	  aiOn: function() {
-	    this.ai = false
-	    this.ws.send('ai,on')
-	  },
-
-	  aiOff: function() {
-	    this.ai = false
-	    this.ws.send('ai,off')
-	  },
-
-	  toggleAI: function() {
-	    this.ai = !this.ai
-	    this.ai ? this.ws.send('ai,on') : this.ws.send('ai,off')
-	  },
-
-	  motorOn: function() {
-	    this.motor = false
-	    this.ws.send('motor,on')
-	  },
-
-	  motorOff: function() {
-	    this.motor = false
-	    this.ws.send('motor,off')
-	  },
-
-	  toggleMotor: function() {
-	    this.motor = !this.motor
-	    this.motor ? this.ws.send('motor,on') : this.ws.send('motor,off')
-	  },
-
-	  loggingOn: function() {
-	    this.logging = false
-	    this.ws.send('logging,on')
-	  },
-
-	  loggingOff: function() {
-	    this.logging = false
-	    this.ws.send('logging,off')
-	  },
-
-	  toggleLogging: function() {
-	    this.logging = !this.logging
-	    this.logging ? this.ws.send('logging,on') : this.ws.send('logging,off')
 	  }
 	}
 
 
 /***/ },
-/* 4 */
+/* 5 */
 /***/ function(module, exports) {
 
 	module.exports = PurePursuitController
@@ -517,14 +468,12 @@
 	  },
 
 	  hasTrack: function() {
-	    return (this.track != undefined && this.track.length > 0)
-	  },
-
-	  motorPos: function(x, y, direction, velocity) {
-	    return this.update([x, y], direction)
+	    return (this.track && this.track.length > 0)
 	  },
 
 	  newKinematic: function(kinematic) {
+	    if (!this.hasTrack()) { return }
+
 	    var kPos = [kinematic[0], kinematic[1]], omega = kinematic[2]
 
 	    // iterate until a point is outside Look ahead distance
@@ -577,7 +526,7 @@
 
 
 /***/ },
-/* 5 */
+/* 6 */
 /***/ function(module, exports) {
 
 	// export
@@ -756,28 +705,33 @@
 
 
 /***/ },
-/* 6 */
+/* 7 */
 /***/ function(module, exports) {
 
 	module.exports = MotorController
 
-	function MotorController() {
+	function MotorController(id) {
 	  this.onMovingToRelative = function() {}
 	  this.onMovingToAbsolute = function() {}
 	  this.motorRelativePos = 0
 	  this.motorOffset = 0
-	  this.motorAmplitude = 200 // 200 mm +-
+	  this.motorAmplitude = 300 // 300 mm +-
+	  this.parrentElement = document.getElementById(id)
+
+	  this.slider = slider
+
 	}
 
 	MotorController.prototype = {
 
 	  zero: function() {
 	    this.motorOffset += this.motorRelativePos
+	    document.getElementById("sliderControl").value = 500 //TODO create slider with the motor controller??
 	  },
 
 	  moveTo: function(relativePos) {
 	    this.motorRelativePos = relativePos
-	    var motorAbsPos = motorRelativePos + motorOffset // 400 steps pr 40 mm
+	    var motorAbsPos = relativePos + this.motorOffset // 400 steps pr 40 mm
 	    this.onMovingToAbsolute(motorAbsPos)
 	    this.onMovingToRelative(relativePos)
 	  },
@@ -794,12 +748,12 @@
 
 
 /***/ },
-/* 7 */
+/* 8 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = TrackGenerator
 
-	var Util = __webpack_require__(2)
+	var Util = __webpack_require__(3)
 	var button = Util.button
 	var post = Util.post
 
@@ -879,7 +833,55 @@
 	}
 
 	function findPoint(e, canvas) {
-	  return [e.clientX - canvas.offsetLeft, e.clientY - canvas.offsetTop]
+	  return [e.pageX - canvas.offsetLeft, e.pageY - canvas.offsetTop]
+	}
+
+
+/***/ },
+/* 9 */
+/***/ function(module, exports, __webpack_require__) {
+
+	module.exports = Logger
+
+	var post = __webpack_require__(3).post
+
+	function Logger() {
+	}
+
+	Logger.prototype = {
+
+	  start: function() {
+	    this.on = true
+	    this.controls = []
+	    this.kinematics = []
+	  },
+
+	  stop: function() {
+	    this.on = false
+	  },
+
+	  newKinematic: function(k) {
+	      if (this.on) {
+	        k.push(Date.now()/1000)
+	        this.controls.push( k )
+	      }
+	  },
+
+	  newControl: function(val) {
+	      if (this.on) {
+	        this.controls.push( {t: Date.now()/1000, p: val})
+	      }
+	  },
+
+	  save: function() {
+	    post("/sessions", {"control": this.controls, "kinematic": this.kinematics})
+	    .then( function(res) {
+	      console.log("session saved! :)")
+	    })
+	    .catch( function(err) {
+	      console.error("session saved error", err)
+	    })
+	  }
 	}
 
 

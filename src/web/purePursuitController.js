@@ -16,14 +16,12 @@ PurePursuitController.prototype = {
   },
 
   hasTrack: function() {
-    return (this.track != undefined && this.track.length > 0)
-  },
-
-  motorPos: function(x, y, direction, velocity) {
-    return this.update([x, y], direction)
+    return (this.track && this.track.length > 0)
   },
 
   newKinematic: function(kinematic) {
+    if (!this.hasTrack()) { return }
+
     var kPos = [kinematic[0], kinematic[1]], omega = kinematic[2]
 
     // iterate until a point is outside Look ahead distance

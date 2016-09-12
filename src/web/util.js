@@ -32,6 +32,9 @@ function button(text, action) {
   return button
 }
 
+function slider(action) {
+  var slider = document.createElement("input")
+}
 
 function merge() {
     var obj, name, copy,

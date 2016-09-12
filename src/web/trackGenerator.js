@@ -80,5 +80,5 @@ TrackGenerator.prototype = {
 }
 
 function findPoint(e, canvas) {
-  return [e.clientX - canvas.offsetLeft, e.clientY - canvas.offsetTop]
+  return [e.pageX - canvas.offsetLeft, e.pageY - canvas.offsetTop]
 }
