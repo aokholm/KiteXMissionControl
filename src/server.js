@@ -55,7 +55,8 @@ function createGenericRestEndPoint(baseName, basePath) {
       method: 'GET',
       path:'/' + baseName,
       handler: function (request, reply) {
-          return reply(JSON.stringify(fs.readdirSync(basePath)))
+        console.log(fs.readdirSync(basePath))
+        return reply(JSON.stringify(fs.readdirSync(basePath)))
       }
   })
 

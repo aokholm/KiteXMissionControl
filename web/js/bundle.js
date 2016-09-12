@@ -63,6 +63,7 @@
 	var TrackGenerator = __webpack_require__(8)
 	var Logger = __webpack_require__(9)
 	var Tracks = __webpack_require__(10)
+	var Sessions = __webpack_require__(11)
 
 	function SystemController() {
 
@@ -74,6 +75,7 @@
 	  this.motorController = new MotorController("motorController")
 	  this.logger = new Logger()
 	  this.tracks = new Tracks("tracks", this.purePursuitController)
+	  this.sessions = new Sessions("sessions")
 
 	  this.state = {
 	    motor: false,
@@ -975,7 +977,7 @@
 	  newKinematic: function(k) {
 	      if (this.on) {
 	        k.push(Date.now()/1000)
-	        this.controls.push( k )
+	        this.kinematics.push( k )
 	      }
 	  },
 
@@ -1007,7 +1009,7 @@
 	const Plot = __webpack_require__(2).Plot
 
 	function Tracks(id, purePursuitController) {
-	  this.parrentElement = document.getElementById("tracks")
+	  this.parrentElement = document.getElementById(id)
 	  this.purePursuitController = purePursuitController
 
 	  this.load()
@@ -1062,6 +1064,80 @@
 	    Tracks.deleteTrack(id)
 	    .then( function() {
 	      tracks.load()
+	    })
+	  })
+	  parrentElement.appendChild(btDelete)
+
+	  return parrentElement
+	}
+
+
+/***/ },
+/* 11 */
+/***/ function(module, exports, __webpack_require__) {
+
+	module.exports = Sessions
+
+	const util = __webpack_require__(3)
+	const Plot = __webpack_require__(2).Plot
+
+	function Sessions(id) {
+	  this.parrentElement = document.getElementById(id)
+	  this.load()
+	}
+
+	Sessions.prototype = {
+
+	  load: function() {
+	    // clean up
+	    while (this.parrentElement.firstChild) {
+	      this.parrentElement.removeChild(this.parrentElement.firstChild);
+	    }
+
+	    var self = this
+	    util.get("/sessions")
+	    .then( function(result) {
+
+	      result.forEach(function(e, i) {
+	        Sessions.get(i)
+	        .then( function( session ) {
+	          self.parrentElement.appendChild(new Session(i, session, self))
+	        })
+	      }, this)
+
+	    })
+	    .catch( function(err) {
+	      console.error("damit", err)
+	    })
+	  }
+	}
+
+	Sessions.get = function(id) { // promise
+	  return util.get("/sessions/" + id)
+	}
+
+	Sessions.delete = function(id) {
+	  return util.deleteItem("/sessions/" + id)
+	}
+
+	function Session(id, session, sessions, purePursuitController) {
+	  var parrentElement = document.createElement("div")
+
+	  var plot = new Plot(160,120)
+	  console.log(session);
+
+	  plot.plotLineNormalized(session.kinematic)
+	  parrentElement.appendChild(plot.canvas)
+
+	  // var btload = util.button("load", function() {
+	  //   purePursuitController.loadTrack(path)
+	  // })
+	  // parrentElement.appendChild(btload)
+
+	  var btDelete = util.button("delete", function() {
+	    Sessions.delete(id)
+	    .then( function() {
+	      sessions.load()
 	    })
 	  })
 	  parrentElement.appendChild(btDelete)

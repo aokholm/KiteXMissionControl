@@ -4,7 +4,7 @@ const util = require("./util.js")
 const Plot = require("./plot.js").Plot
 
 function Tracks(id, purePursuitController) {
-  this.parrentElement = document.getElementById("tracks")
+  this.parrentElement = document.getElementById(id)
   this.purePursuitController = purePursuitController
 
   this.load()

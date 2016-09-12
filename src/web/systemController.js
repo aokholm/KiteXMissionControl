@@ -8,6 +8,7 @@ var MotorController = require("./motorController.js")
 var TrackGenerator = require("./trackGenerator.js")
 var Logger = require("./logger.js")
 var Tracks = require("./tracks.js")
+var Sessions = require("./sessions")
 
 function SystemController() {
 
@@ -19,6 +20,7 @@ function SystemController() {
   this.motorController = new MotorController("motorController")
   this.logger = new Logger()
   this.tracks = new Tracks("tracks", this.purePursuitController)
+  this.sessions = new Sessions("sessions")
 
   this.state = {
     motor: false,
