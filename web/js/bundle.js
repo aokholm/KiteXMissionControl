@@ -582,7 +582,7 @@
 	  this.onCurvature = function(){}
 	  this.onTrack = function(){}
 	  this.currentPoint = 0
-	  this.lad = 0.15 // look ahead distance //TODO could be dynamic dependen on speed
+	  this.lad = 0.2 // look ahead distance //TODO could be dynamic dependen on speed
 	  this.track = []
 	}
 
@@ -756,7 +756,7 @@
 	      this.kite.velocity = vel
 	    }
 
-	    if (this.track.length == this.trackBufferSize) {
+	    while (this.track.length >= this.trackBufferSize) {
 	      this.track.shift()
 	    }
 	  },
@@ -887,7 +887,7 @@
 	}
 
 	MotorController.curvatureToPos = function(curvature) {
-	  return curvature * 150 // derived from observations
+	  return curvature * 100 // derived from observations // changed to 100
 	}
 
 

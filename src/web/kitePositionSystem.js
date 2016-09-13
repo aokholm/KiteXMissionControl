@@ -91,7 +91,7 @@ KitePositionSystem.prototype = {
       this.kite.velocity = vel
     }
 
-    if (this.track.length == this.trackBufferSize) {
+    while (this.track.length >= this.trackBufferSize) {
       this.track.shift()
     }
   },

@@ -4,7 +4,7 @@ function PurePursuitController() {
   this.onCurvature = function(){}
   this.onTrack = function(){}
   this.currentPoint = 0
-  this.lad = 0.15 // look ahead distance //TODO could be dynamic dependen on speed
+  this.lad = 0.2 // look ahead distance //TODO could be dynamic dependen on speed
   this.track = []
 }
 

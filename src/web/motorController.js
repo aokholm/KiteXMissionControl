@@ -43,5 +43,5 @@ MotorController.prototype = {
 }
 
 MotorController.curvatureToPos = function(curvature) {
-  return curvature * 150 // derived from observations
+  return curvature * 100 // derived from observations // changed to 100
 }
